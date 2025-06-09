@@ -1,0 +1,292 @@
+:root {
+    --background-blue: #E0F7FA;
+    --icon-button-blue: #0277BD;
+    --box-background: #FDFFFC;
+    --text-color: #333333;
+    --border-radius: 15px; /* Original border radius */
+    --box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    --top-bar-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+    
+    --top-bar-height: 50px;
+
+    --main-bar-min-height: 70px; 
+    --main-bar-padding-vertical: 10px;
+    --main-bar-minimized-height: 35px;
+
+    --parts-bar-min-height: 50px;
+    --parts-bar-padding-vertical: 15px;
+    --parts-bar-minimized-height: 35px;
+    
+    --inter-bar-gap: 10px;
+    --bottom-bars-container-offset: 20px; /* Padding below the lowest bar inside the container */
+    --bar-padding-horizontal: 25px;
+
+    /* For JS body padding calculation: offset from container bottom + an extra general clearance */
+    --page-fixed-bottom-offset: calc(var(--bottom-bars-container-offset) + 30px); 
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: var(--background-blue);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding-top: var(--top-bar-height);
+    /* padding-bottom is set by ux_script.js */
+    box-sizing: border-box;
+    transition: padding-bottom 0.3s ease-in-out;
+}
+
+.top-logo-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--top-bar-height);
+    background-color: var(--box-background); box-shadow: var(--top-bar-shadow);
+    display: flex; justify-content: center; align-items: center;
+    padding: 0 var(--bar-padding-horizontal); box-sizing: border-box; z-index: 1010;
+}
+
+.logo-content-wrapper {
+    width: 100%; max-width: 1200px; display: flex;
+    justify-content: center; align-items: baseline; gap: 10px;
+}
+.logo-title { font-size: 26px; font-weight: bold; color: var(--icon-button-blue); }
+.logo-subtitle { font-size: 13px; font-style: italic; color: #555555; }
+
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 10px; /* Consistent with previous bottom bar layout */
+    box-sizing: border-box;
+    overflow: hidden; /* Prevent main content from causing scrollbars if score box is contained */
+}
+
+.score-display-box {
+    background-color: var(--box-background);
+    border-radius: var(--border-radius); /* Use the main border-radius */
+    box-shadow: var(--box-shadow);
+    width: 100%; /* Full width of its parent .main-content */
+    height: 100%; /* Full height of its parent .main-content */
+    overflow-x: auto;   /* HORIZONTAL SCROLLING FOR SCORE */
+    overflow-y: hidden; 
+    text-align: left;
+    position: relative;
+}
+.score-display-box > div[id^="osmdSvgPage"] {
+    display: inline-block; 
+    min-width: 100%; 
+}
+.score-display-box p#scorePlaceholder {
+    display: flex; justify-content: center; align-items: center;
+    height: 100%; min-height: 150px; text-align: center; color: #777;
+}
+
+.bottom-bars-container {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; flex-direction: column-reverse; align-items: center;
+    gap: var(--inter-bar-gap);
+    padding: 0 var(--bar-padding-horizontal) var(--bottom-bars-container-offset) var(--bar-padding-horizontal);
+    box-sizing: border-box; pointer-events: none; z-index: 1000;
+}
+
+.control-bar {
+    width: 100%; max-width: 1200px; background-color: var(--box-background);
+    border-radius: var(--border-radius); box-shadow: var(--box-shadow);
+    display: flex; align-items: center; box-sizing: border-box; pointer-events: auto;
+    opacity: 1; /* Default opacity */
+    transition: min-height 0.3s ease-in-out, 
+                padding 0.3s ease-in-out, 
+                opacity 0.3s ease-in-out; /* Added opacity transition */
+}
+
+.control-bar.minimized { /* New rule for opacity when minimized */
+    opacity: 0.92;
+}
+
+/* --- Main Controls Bar (Bottom) --- */
+.main-controls-bar {
+    min-height: var(--main-bar-min-height);
+    padding: var(--main-bar-padding-vertical) var(--bar-padding-horizontal);
+    justify-content: space-between; /* For content wrapper and toggle button */
+}
+
+#mainControlsContentWrapper {
+    display: flex;
+    flex-grow: 1;
+    justify-content: center; /* Original behavior for items within main bar */
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    overflow: hidden;
+}
+
+.main-controls-bar.minimized {
+    min-height: var(--main-bar-minimized-height);
+    justify-content: flex-end;
+    padding-top: 4px;
+    padding-bottom: 5px;
+    /* Opacity is handled by .control-bar.minimized */
+}
+.main-controls-bar.minimized #mainControlsContentWrapper {
+    display: none;
+}
+
+/* --- Part Controls Bar (Bottom) --- */
+.part-controls-bar {
+    min-height: var(--parts-bar-min-height);
+    padding: var(--parts-bar-padding-vertical) var(--bar-padding-horizontal);
+    justify-content: space-between; /* For content wrapper and toggle button */
+}
+
+#partControlsContentWrapper {
+    flex-grow: 1;
+    display: flex;
+    justify-content: space-around; /* Or center, depending on desired look for dummy parts */
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    overflow: hidden;
+}
+.part-control-entry {
+    display: flex; align-items: center; gap: 5px; padding: 2px 5px;
+    border: 1px dashed var(--icon-button-blue); border-radius: 6px;
+}
+.part-label { font-size: 10px; color: var(--text-color); white-space: nowrap; }
+.part-volume-slider-dummy { width: 50px; height: 10px; accent-color: var(--icon-button-blue); margin: 0; }
+.part-button-dummy {
+    font-size: 10px; padding: 2px 4px; border: 1px solid var(--icon-button-blue);
+    background-color: var(--box-background); color: var(--icon-button-blue);
+    border-radius: 4px; cursor: pointer; line-height: 1;
+}
+.part-button-dummy:hover { background-color: #e0e0e0; }
+
+.part-controls-bar.minimized {
+    min-height: var(--parts-bar-minimized-height);
+    justify-content: flex-end;
+    padding-top: 4px;
+    padding-bottom: 5px;
+    /* Opacity is handled by .control-bar.minimized */
+}
+.part-controls-bar.minimized #partControlsContentWrapper {
+    display: none;
+}
+
+/* --- Common Toggle Button for Bars --- */
+.toggle-bar-button {
+    padding: 4px;
+    line-height: 0;
+    flex-shrink: 0;
+    background-color: transparent;
+    margin-left: 8px; /* Space it from the content wrapper if visible */
+}
+.toggle-bar-button:hover { background-color: #e0e0e0; }
+.toggle-bar-button svg.toggle-icon {
+    display: block; width: 18px; height: 18px; fill: var(--icon-button-blue);
+}
+
+/* --- Original Control Styles (adapted from your initial CSS) --- */
+.bar-section { display: flex; align-items: center; }
+.controls-section { /* Applies to sections within #mainControlsContentWrapper */
+    display: flex; justify-content: center; align-items: center;
+    gap: 10px; flex-wrap: wrap;
+}
+#mainControlsContentWrapper .right-controls { gap: 10px; } /* Ensure specificity if needed */
+
+.control-button { /* Base styles for action buttons, not toggle buttons */
+    background-color: transparent; border: none; color: var(--icon-button-blue);
+    font-size: 20px; cursor: pointer; padding: 8px; border-radius: var(--border-radius);
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    line-height: normal; display: inline-flex; align-items: center;
+    justify-content: center; text-decoration: none;
+}
+.control-button:not(.toggle-bar-button):hover { background-color: #e0e0e0; }
+.control-button:not(.toggle-bar-button):active { background-color: #c0c0c0; }
+.control-button.active { background-color: var(--icon-button-blue); color: var(--box-background); }
+
+.navigation-slider-container {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; flex-grow: 1; min-width: 150px;
+}
+.navigation-slider { width: 100%; accent-color: var(--icon-button-blue); margin: 0; }
+.time-display { font-size: 12px; color: var(--icon-button-blue); font-weight: bold; min-width: 3em; white-space: nowrap; }
+
+.slider-control-group { display: flex; align-items: center; gap: 5px; }
+.slider-label-prefix { font-size: 14px; color: var(--icon-button-blue); font-weight: bold; padding: 0 2px; min-width: 1em; text-align: center; }
+.volume-slider-container, .tempo-slider-container { display: flex; align-items: center; gap: 8px; } /* Kept row direction */
+.master-volume-slider, .tempo-slider { width: 90px; accent-color: var(--icon-button-blue); margin: 0; }
+#volumeValueOutput, #tempoValueOutput { font-size: 12px; color: var(--icon-button-blue); font-weight: bold; min-width: 3.5em; white-space: nowrap; text-align: left; }
+
+.frequency-switch { display: flex; border: 1px solid var(--icon-button-blue); border-radius: var(--border-radius); overflow: hidden; }
+.switch-button { /* Part of frequency switch, already has .control-button base */
+    border-radius: 0; padding: 6px 10px; font-size: 12px;
+    background-color: var(--box-background); /* Overrides .control-button transparent */
+    border: none;
+}
+.switch-button.active { background-color: var(--icon-button-blue); color: var(--box-background); }
+.switch-button:not(:last-child) { border-right: 1px solid var(--icon-button-blue); }
+
+.cursor-options-container { display: flex; align-items: center; position: relative; }
+.cursor-options-container .control-label { margin-right: 5px; font-size: 12px; color: var(--icon-button-blue); font-weight: normal; }
+select.control-button-like {
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    background-color: var(--box-background); border: 1px solid var(--icon-button-blue);
+    color: var(--icon-button-blue); font-size: 12px; cursor: pointer;
+    padding: 6px 30px 6px 10px; border-radius: var(--border-radius);
+    height: auto; line-height: normal; min-width: 100px; text-align: left;
+}
+.cursor-options-container::after { content: '▼'; font-size: 10px; color: var(--icon-button-blue); position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 1; }
+select.control-button-like:hover { background-color: #e0e0e0; border-color: #025c8c; }
+select.control-button-like:focus, select.control-button-like:active { background-color: #d0d0d0; outline: 2px solid var(--icon-button-blue); outline-offset: -1px; }
+
+
+
+@media (max-width: 768px) {
+    .score-display-box { width: 100%; padding: 5px; min-height: 200px; } /* Full width on small screens */
+    
+    #mainControlsContentWrapper { /* Content of main bar becomes column */
+        flex-direction: column;
+        align-items: center;
+        gap: 10px; /* Adjust gap for column layout */
+    }
+    .main-controls-bar { /* Bar itself might need more padding if content is stacked */
+        padding-top: 15px;
+        padding-bottom: 15px;
+    }
+
+    #mainControlsContentWrapper .controls-section { width: 100%; justify-content: space-around; }
+    #mainControlsContentWrapper .right-controls {
+        width: auto; flex-direction: row; flex-wrap: wrap;
+        justify-content: center; gap: 10px; margin-top: 10px;
+    }
+    .navigation-slider-container { width: 80%; order: 1; margin-top: 10px;}
+
+    #mainControlsContentWrapper .slider-control-group { order: 2; }
+    #mainControlsContentWrapper #cursorControls { order: 3; }
+    #mainControlsContentWrapper .frequency-switch { order: 4;}
+
+    .master-volume-slider, .tempo-slider { width: 70px; }
+    #partControlsContentWrapper { gap: 5px; }
+    .part-control-entry { gap: 3px; padding: 1px 3px;}
+    .part-volume-slider-dummy { width: 40px; }
+}
+
+@media (max-width: 480px) {
+    .logo-title { font-size: 22px; }
+    .logo-subtitle { font-size: 12px; }
+    .control-button:not(.toggle-bar-button) { font-size: 18px; }
+    select.control-button-like, .cursor-options-container .control-label, .switch-button, .slider-label-prefix { font-size: 11px; }
+    select.control-button-like { padding: 5px 25px 5px 8px; min-width: 90px; }
+    .cursor-options-container::after { right: 8px; }
+    .master-volume-slider, .tempo-slider { width: 60px; }
+    .navigation-slider-container { width: 90%;}
+    #mainControlsContentWrapper .right-controls { gap: 5px; }
+    #volumeValueOutput, #tempoValueOutput { min-width: 3em; }
+
+    #partControlsContentWrapper { justify-content: center; gap: 5px; }
+    .part-label { font-size: 9px; }
+    .part-volume-slider-dummy { width: 30px; }
+    .part-button-dummy { font-size: 9px; padding: 1px 2px;}
+}

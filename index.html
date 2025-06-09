@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PYP - Prepare Your Part</title>
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.min.js" defer></script>
+    <script src="https://nbrosowsky.github.io/tonejs-instruments/external-js/nprogress.js" defer></script>
+    <script src="https://nbrosowsky.github.io/tonejs-instruments/Tonejs-Instruments.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js" defer></script>
+</head>
+<body>
+    <div class="top-logo-bar">
+        <div class="logo-content-wrapper">
+            <span class="logo-title">PYP</span>
+            <span class="logo-subtitle">prepare your part</span>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="score-display-box" id="scoreDisplayArea">
+            <p id="scorePlaceholder">Select a MusicXML file to display the score here.</p>
+        </div>
+    </div>
+
+    <div class="bottom-bars-container">
+        <div class="control-bar main-controls-bar" id="mainControlsBar">
+            <div id="mainControlsContentWrapper">
+                <div class="bar-section controls-section">
+                    <button class="control-button" title="Load Score" id="loadScoreButton">load</button>
+                    <input type="file" id="fileInput" accept=".xml,.musicxml,.mxl" style="display: none;">
+                    <button class="control-button" title="Play" id="playButton">play</button>
+                    <button class="control-button" title="Pause" id="pauseButton">pause</button>
+                    <button class="control-button" title="Go to Start" id="startButton">start</button>
+                </div>
+                <div class="navigation-slider-container">
+                    <span id="currentTimeDisplay" class="time-display">0:00</span>
+                    <input type="range" min="0" max="100" value="0" class="navigation-slider" id="navigationSlider" title="Navigate piece" disabled>
+                    <span id="totalTimeDisplay" class="time-display">0:00</span>
+                </div>
+                <div class="bar-section controls-section right-controls">
+                    <div class="slider-control-group">
+                        <span class="slider-label-prefix">v</span>
+                        <div class="volume-slider-container">
+                            <input type="range" min="0" max="100" value="75" class="master-volume-slider" id="masterVolume" title="Master Volume">
+                            <output for="masterVolume" id="volumeValueOutput">75%</output>
+                        </div>
+                    </div>
+                    <div class="slider-control-group">
+                        <span class="slider-label-prefix">t</span>
+                        <div class="tempo-slider-container">
+                            <input type="range" min="1" max="200" value="100" class="tempo-slider" id="tempoSlider" title="Tempo">
+                            <output for="tempoSlider" id="tempoValueOutput">100%</output>
+                        </div>
+                    </div>
+                    <div id="cursorControls" class="cursor-options-container">
+                        <label for="cursorTypeSelect" class="control-label">Cursor:</label>
+                        <select id="cursorTypeSelect" class="control-select control-button-like"></select>
+                    </div>
+                    <div class="frequency-switch" title="Concert Pitch">
+                        <button class="switch-button active" id="a440">A=440Hz</button>
+                        <button class="switch-button" id="a415">A=415Hz</button>
+                    </div>
+                </div>
+            </div>
+            <button id="toggleMainControlsButton" class="control-button toggle-bar-button">
+                </button>
+        </div>
+
+        <div class="control-bar part-controls-bar" id="partControlsBar">
+            <div id="partControlsContentWrapper">
+                <div class="part-control-entry">
+                    <span class="part-label">Soprano:</span>
+                    <input type="range" class="part-volume-slider-dummy" title="Soprano Volume" value="75" min="0" max="100">
+                    <button class="part-button-dummy" title="Mute Soprano">M</button>
+                    <button class="part-button-dummy" title="Solo Soprano">S</button>
+                </div>
+                <div class="part-control-entry">
+                    <span class="part-label">Alto:</span>
+                    <input type="range" class="part-volume-slider-dummy" title="Alto Volume" value="70" min="0" max="100">
+                    <button class="part-button-dummy" title="Mute Alto">M</button>
+                    <button class="part-button-dummy" title="Solo Alto">S</button>
+                </div>
+                <div class="part-control-entry">
+                    <span class="part-label">Tenor:</span>
+                    <input type="range" class="part-volume-slider-dummy" title="Tenor Volume" value="80" min="0" max="100">
+                    <button class="part-button-dummy" title="Mute Tenor">M</button>
+                    <button class="part-button-dummy" title="Solo Tenor">S</button>
+                </div>
+                 <div class="part-control-entry">
+                    <span class="part-label">Bass:</span>
+                    <input type="range" class="part-volume-slider-dummy" title="Bass Volume" value="78" min="0" max="100">
+                    <button class="part-button-dummy" title="Mute Bass">M</button>
+                    <button class="part-button-dummy" title="Solo Bass">S</button>
+                </div>
+            </div>
+            <button id="togglePartControlsButton" class="control-button toggle-bar-button">
+                </button>
+        </div>
+    </div>
+
+    <div id="parts-control-container">
+        <h3>Part Volumes</h3>
+        <div id="parts-control-entry">
+            <!-- Volume sliders will be added here -->
+        </div>
+    </div>
+
+    <script src="ux_script.js" defer></script>
+    <script src="pyp-script.js" defer></script> 
+</body>
+</html>
