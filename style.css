@@ -445,9 +445,38 @@ select {
     cursor: pointer;
 }
 
-.score-display-box > div[id^="osmdSvgPage"] {
+.score-display-box > div[id^="osmdSvgPage"],
+.osmd-score-inner > div[id^="osmdCanvasPage"],
+.osmd-score-inner > div[id^="osmdSvgPage"] {
     display: inline-block;
     min-width: 100%;
+}
+
+.osmd-score-track {
+    display: inline-block;
+    min-width: 100%;
+    box-sizing: content-box;
+    vertical-align: top;
+}
+
+.osmd-score-track.page-mode {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.osmd-score-inner {
+    position: relative;
+    display: inline-block;
+    min-width: 100%;
+    vertical-align: top;
+    will-change: transform;
+}
+
+.osmd-score-track.page-mode .osmd-score-inner {
+    display: block;
+    width: 100%;
+    will-change: auto;
 }
 
 /* Ensure OSMD SVG does not obscure the cursor behind an opaque fill */

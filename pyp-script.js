@@ -21,7 +21,7 @@
         MIN_ZOOM: 0.5,
         MAX_ZOOM: 1.8,
         ZOOM_STEP: 0.1,
-        CONTINUOUS_CURSOR_ANCHOR_X: 0.30, // Keep cursor ~30% from left edge for generous lookahead
+        CONTINUOUS_CURSOR_ANCHOR_X: 0.50, // Keep cursor centered in middle (50%) for MuseScore 4 smooth right-to-left panning
         PAGE_SCROLL_TOP_ANCHOR: 0.22,
         CURSOR_COLOR: '#0288D1',
         CURSOR_ALPHA: 0.45,
@@ -582,6 +582,10 @@
         ticksPerWhole: 768,
         totalMusicalTicks: 0,
         currentTicks: 0,
+        smoothTicks: 0,
+        scoreEndX: 0,
+        continuousPadX: 0,
+        cameraScrollX: 0,
         baseScoreBpm: CONFIG.DEFAULT_BPM,
         activeBarBaseBpm: CONFIG.DEFAULT_BPM,
         tempoPercent: CONFIG.DEFAULT_TEMPO_PERCENT,
@@ -1167,7 +1171,7 @@
         ensureMasterAudioChain();
 
         if (!part.gainNode) {
-            part.gainNode = new Tone.Gain(1).connect(state.masterGain);
+            part.gainNode = new Tone.Gain((part.volume ?? CONFIG.DEFAULT_PART_VOLUME) / 100).connect(state.masterGain);
         }
 
         disposeSinglePartInstrument(part);
@@ -1754,22 +1758,51 @@
         const lastStepTick = cursorSteps.length ? cursorSteps[cursorSteps.length - 1].ticks : 0;
         state.totalMusicalTicks = Math.max(lastBarEnd, maxNoteEndTicks, lastStepTick, 1);
 
+        // Compute horizontal end X of final barline for smooth continuous panning through the last measure
+        const lastStepX = cursorSteps.length ? cursorSteps[cursorSteps.length - 1].x : 0;
+        let scoreEndX = lastStepX + 60;
+        try {
+            const mList = osmd.GraphicSheet?.MeasureList;
+            if (Array.isArray(mList) && mList.length > 0) {
+                const lastCol = mList[mList.length - 1];
+                const gm = Array.isArray(lastCol) ? lastCol[0] : null;
+                if (gm && gm.PositionAndShape) {
+                    const rightUnits = (gm.PositionAndShape.AbsolutePosition?.x ?? 0) + (gm.PositionAndShape.Size?.width ?? 0);
+                    const rightPx = rightUnits * 10 * state.zoom;
+                    if (rightPx > lastStepX) {
+                        scoreEndX = rightPx;
+                    }
+                }
+            }
+        } catch (_) { /* fallback used */ }
+        state.scoreEndX = scoreEndX;
+
         state.parts = nextParts;
         state.notes = notes;
         state.cursorSteps = cursorSteps;
         state.barData = barData;
         state.metronomeBeats = metronomeBeats;
 
-        // Reset cursor back to step 0 cleanly
+        // Reset cursor back to step 0 (very beginning of score) cleanly
         osmd.cursor.reset();
-        ensureCursorZIndex();
+        osmd.cursor.show();
+        applyCursorStyle();
         state.currentStepIndex = 0;
 
-        // Initialize loop bar bounds if fresh score
-        if (!preserveMixerSettings && barData.length > 0) {
-            state.loopStartBar = 1;
-            state.loopEndBar = Math.min(barData.length, Math.max(2, Math.min(4, barData.length)));
-            syncLoopInputsUI();
+        if (!preserveMixerSettings) {
+            state.currentTicks = 0;
+            state.smoothTicks = 0;
+            if (barData.length > 0) {
+                state.loopStartBar = 1;
+                state.loopEndBar = Math.min(barData.length, Math.max(2, Math.min(4, barData.length)));
+                syncLoopInputsUI();
+            }
+        }
+
+        // Apply 50% horizontal padding in Continuous View and position camera at start
+        updateContinuousHorizontalPadding(false);
+        if (!preserveMixerSettings) {
+            updateCameraForTicks(0, 0, true);
         }
 
         // Rebuild UI elements
@@ -1799,6 +1832,8 @@
             pausePlayback(false);
         }
 
+        updateContinuousHorizontalPadding(true);
+
         state.osmd.setOptions({
             renderSingleHorizontalStaffline: state.continuousScrollMode,
         });
@@ -1818,6 +1853,54 @@
     // ===========================================
     // FAST OSMD CURSOR MOVEMENT & 60FPS CAMERA
     // ===========================================
+
+    function updateContinuousHorizontalPadding(resetForRender = false) {
+        const box = dom.scoreDisplayArea;
+        const track = box ? box.querySelector('.osmd-score-track') : null;
+        const inner = box ? box.querySelector('.osmd-score-inner') : null;
+        if (!box || !track) {
+            state.continuousPadX = 0;
+            return;
+        }
+
+        track.classList.toggle('page-mode', !state.continuousScrollMode);
+
+        if (resetForRender || !state.continuousScrollMode) {
+            state.continuousPadX = 0;
+            track.style.paddingLeft = '0px';
+            track.style.paddingRight = '0px';
+            if (inner) inner.style.transform = '';
+            return;
+        }
+
+        const padX = Math.max(0, Math.round(box.clientWidth * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X));
+        state.continuousPadX = padX;
+        track.style.paddingLeft = `${padX}px`;
+        track.style.paddingRight = `${padX}px`;
+    }
+
+    function getInterpolatedCursorX(nowTicks) {
+        const steps = state.cursorSteps;
+        if (!steps.length) return 0;
+
+        const idx = getStepIndexAtTicks(nowTicks);
+        const curr = steps[idx];
+        if (!curr) return 0;
+
+        const next = steps[idx + 1];
+        if (next && next.ticks > curr.ticks && next.x >= curr.x) {
+            const frac = Math.max(0, Math.min(1, (nowTicks - curr.ticks) / (next.ticks - curr.ticks)));
+            return curr.x + (next.x - curr.x) * frac;
+        }
+
+        // Smoothly pan through the final note/bar to the end barline
+        if (idx === steps.length - 1 && state.totalMusicalTicks > curr.ticks && state.scoreEndX > curr.x) {
+            const frac = Math.max(0, Math.min(1, (nowTicks - curr.ticks) / (state.totalMusicalTicks - curr.ticks)));
+            return curr.x + (state.scoreEndX - curr.x) * frac;
+        }
+
+        return curr.x;
+    }
 
     function moveCursorToStep(targetIndex) {
         const osmd = state.osmd;
@@ -1878,24 +1961,39 @@
         if (!curr) return;
 
         if (state.continuousScrollMode) {
-            // Interpolate smoothly between current step and next step at 60fps!
-            let interpX = curr.x;
-            const next = steps[stepIdx + 1];
-            if (next && next.ticks > curr.ticks && next.x >= curr.x) {
-                const frac = Math.max(0, Math.min(1, (nowTicks - curr.ticks) / (next.ticks - curr.ticks)));
-                interpX = curr.x + (next.x - curr.x) * frac;
+            // Smoothly interpolate playhead X across the score at 60fps+
+            const interpX = getInterpolatedCursorX(nowTicks);
+
+            // Glide the cursor element smoothly with the interpolated playhead
+            // so the cursor stays locked in the middle while the score glides right-to-left
+            const cursorEl = state.osmd?.cursor?.cursorElement;
+            const cursorType = getCurrentCursorType();
+            const isMeasureCursor = cursorType === 3 || cursorType === 4;
+            if (cursorEl && !isMeasureCursor) {
+                cursorEl.style.left = `${interpX.toFixed(2)}px`;
             }
 
             const viewportW = box.clientWidth;
             const maxScrollX = Math.max(0, box.scrollWidth - viewportW);
-            const desiredX = Math.max(0, Math.min(maxScrollX, interpX - viewportW * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X));
+            const anchorOffset = viewportW * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X;
+            const desiredX = Math.max(0, Math.min(maxScrollX, (state.continuousPadX + interpX) - anchorOffset));
 
-            if (snap || Math.abs(desiredX - box.scrollLeft) > viewportW * 0.75) {
-                box.scrollLeft = desiredX;
-            } else {
-                // Frame-rate-independent smooth camera follow
-                const alpha = 1 - Math.exp(-14 * Math.min(dt, 0.05));
-                box.scrollLeft = box.scrollLeft + (desiredX - box.scrollLeft) * alpha;
+            state.cameraScrollX = desiredX;
+
+            const intScroll = Math.round(state.cameraScrollX);
+            if (box.scrollLeft !== intScroll) {
+                box.scrollLeft = intScroll;
+            }
+
+            // Sub-pixel GPU transform compensation eliminates 1px integer scrollLeft stepping
+            const inner = box.querySelector('.osmd-score-inner');
+            if (inner) {
+                if (state.isPlaying) {
+                    const residual = state.cameraScrollX - box.scrollLeft;
+                    inner.style.transform = `translate3d(${-residual.toFixed(3)}px, 0, 0)`;
+                } else {
+                    inner.style.transform = '';
+                }
             }
 
             // Ensure vertical scroll keeps the staff visible
@@ -1946,7 +2044,9 @@
     function playbackFrameLoop(timestamp) {
         if (!state.isPlaying) return;
 
-        const dt = state.lastFrameTime ? (timestamp - state.lastFrameTime) / 1000 : 1 / 60;
+        const dt = state.lastFrameTime
+            ? Math.min(0.1, Math.max(0.001, (timestamp - state.lastFrameTime) / 1000))
+            : (1 / 60);
         state.lastFrameTime = timestamp;
 
         const rawTicks = Math.max(0, Tone.Transport.ticks);
@@ -1964,8 +2064,10 @@
         // 2. Handle End of Piece cleanly
         if (rawTicks >= state.totalMusicalTicks) {
             state.currentTicks = state.totalMusicalTicks;
+            state.smoothTicks = state.totalMusicalTicks;
             const lastStep = Math.max(0, state.cursorSteps.length - 1);
             moveCursorToStep(lastStep);
+            updateCameraForTicks(state.totalMusicalTicks, dt, true);
             updateTimelineReadout(state.totalMusicalTicks);
             stopAtEndOfPiece();
             return;
@@ -1981,14 +2083,29 @@
             updateTempoReadoutUI();
         }
 
-        // 4. Advance cursor to exact step matching live audio ticks
+        // 4. Advance high-res floating-point ticks phase-locked to Tone.Transport.ticks
+        //    (Eliminates integer tick quantization and 128-sample Web Audio block stepping!)
+        const liveBpm = getEffectiveBpm();
+        const ppq = state.ticksPerWhole / 4;
+        const ticksPerSec = (liveBpm / 60) * ppq;
+        state.smoothTicks += dt * ticksPerSec;
+
+        const drift = rawTicks - state.smoothTicks;
+        if (Math.abs(drift) > ppq * 0.45) {
+            state.smoothTicks = rawTicks;
+        } else {
+            state.smoothTicks += drift * Math.min(1, dt * 10);
+        }
+        state.smoothTicks = Math.max(0, Math.min(state.totalMusicalTicks, state.smoothTicks));
+
+        // 5. Advance OSMD step & note highlight on beat boundaries
         const targetStep = getStepIndexAtTicks(rawTicks);
         moveCursorToStep(targetStep);
 
-        // 5. Smooth 60fps camera scroll
-        updateCameraForTicks(rawTicks, dt, false);
+        // 6. Smooth 60fps+ MuseScore-style panning with cursor centered
+        updateCameraForTicks(state.smoothTicks, dt, false);
 
-        // 6. Update timeline slider & bar display
+        // 7. Update timeline slider & bar display
         if (!state.isSliderDragging) {
             updateTimelineReadout(rawTicks);
         }
@@ -2003,6 +2120,8 @@
             state.rafId = null;
         }
         Tone.Transport.pause();
+        const inner = dom.scoreDisplayArea ? dom.scoreDisplayArea.querySelector('.osmd-score-inner') : null;
+        if (inner) inner.style.transform = '';
         clearAllNoteHighlights();
         updatePlayPauseButtonUI();
     }
@@ -2022,6 +2141,7 @@
         Tone.Transport.pause();
         Tone.Transport.ticks = targetTicks;
         state.currentTicks = targetTicks;
+        state.smoothTicks = targetTicks;
 
         const targetStep = getStepIndexAtTicks(targetTicks);
         moveCursorToStep(targetStep);
@@ -2067,6 +2187,7 @@
 
         // Sync cursor & transport to startTicks
         state.currentTicks = startTicks;
+        state.smoothTicks = startTicks;
         const startStep = getStepIndexAtTicks(startTicks);
         moveCursorToStep(startStep);
         updateCameraForTicks(startTicks, 0, true);
@@ -2091,6 +2212,7 @@
         if (!state.isPlaying) return;
 
         state.currentTicks = Math.max(0, Math.min(state.totalMusicalTicks, Tone.Transport.ticks));
+        state.smoothTicks = state.currentTicks;
         state.isPlaying = false;
 
         if (state.rafId) {
@@ -2101,6 +2223,9 @@
         if (state.audioInitialized && Tone.Transport.state === 'started') {
             Tone.Transport.pause();
         }
+
+        const inner = dom.scoreDisplayArea ? dom.scoreDisplayArea.querySelector('.osmd-score-inner') : null;
+        if (inner) inner.style.transform = '';
 
         releaseAllInstruments();
         clearAllNoteHighlights();
@@ -2151,6 +2276,7 @@
         }
 
         state.currentTicks = snappedTicks;
+        state.smoothTicks = snappedTicks;
         if (state.audioInitialized) {
             Tone.Transport.ticks = snappedTicks;
         }
@@ -2535,18 +2661,29 @@
             slider.min = '0';
             slider.max = '100';
             slider.value = String(part.volume);
-            slider.title = `${part.name} Volume`;
+            slider.title = `${part.name} Volume (Double-click to reset to ${CONFIG.DEFAULT_PART_VOLUME}%)`;
             slider.setAttribute('aria-label', `${part.name} Volume`);
 
             const volReadout = document.createElement('span');
             volReadout.className = 'part-vol-value';
             volReadout.textContent = `${part.volume}%`;
+            volReadout.title = `Double-click to reset to ${CONFIG.DEFAULT_PART_VOLUME}%`;
+
+            const resetPartVolumeToDefault = () => {
+                part.volume = CONFIG.DEFAULT_PART_VOLUME;
+                slider.value = String(CONFIG.DEFAULT_PART_VOLUME);
+                volReadout.textContent = `${CONFIG.DEFAULT_PART_VOLUME}%`;
+                applyAllPartGains(false);
+            };
 
             slider.addEventListener('input', () => {
                 part.volume = parseInt(slider.value, 10);
                 volReadout.textContent = `${part.volume}%`;
                 applyAllPartGains(false);
             });
+
+            slider.addEventListener('dblclick', resetPartVolumeToDefault);
+            volReadout.addEventListener('dblclick', resetPartVolumeToDefault);
 
             volRow.appendChild(slider);
             volRow.appendChild(volReadout);
@@ -2579,7 +2716,9 @@
         state.scoreLoaded = false;
         state.scoreTitle = fallbackTitle;
         state.rawXmlPartMeta = parseRawXmlPartMetadata(content);
+        state.parts = {};
         state.currentTicks = 0;
+        state.smoothTicks = 0;
         state.currentStepIndex = 0;
         state.notes = [];
         state.cursorSteps = [];
@@ -2599,9 +2738,18 @@
         dom.scoreDisplayArea.scrollTop = 0;
 
         try {
+            // Prepare dedicated track + inner container so OSMD SVG & cursor share (0,0) origin
+            // and Continuous View can add 50% horizontal padding on both sides for centered panning
+            dom.scoreDisplayArea.innerHTML = `
+                <div class="osmd-score-track${state.continuousScrollMode ? '' : ' page-mode'}" id="osmdScoreTrack">
+                    <div class="osmd-score-inner" id="osmdScoreInner"></div>
+                </div>
+            `;
+            const scoreInner = document.getElementById('osmdScoreInner') || dom.scoreDisplayArea;
+
             // Create fresh OSMD instance with autoResize: false & followCursor: false
             // (We handle resize and smooth 60fps camera scrolling ourselves with zero conflicts!)
-            const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(dom.scoreDisplayArea, {
+            const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(scoreInner, {
                 autoResize: false,
                 backend: 'svg',
                 drawTitle: false,
@@ -2619,7 +2767,6 @@
             });
 
             await osmd.load(content);
-            dom.scoreDisplayArea.innerHTML = '';
             osmd.zoom = state.zoom;
             osmd.render();
 
@@ -2627,14 +2774,18 @@
             state.scoreLoaded = true;
             dom.scoreDisplayArea.classList.add('score-loaded');
 
+            // Automatically expand part mixer before extracting/centering so viewport height is final
             extractScoreData(false);
             setScoreControlsEnabled(true);
             syncLoopInputsUI();
 
-            // Automatically expand part mixer when loading a multi-part score
             if (window.PYP_UX && Object.keys(state.parts).length > 1) {
                 window.PYP_UX.setMixerExpanded(true);
             }
+
+            // Ensure cursor and centered camera are locked at step 0 (Bar 1, Beat 1)
+            updateContinuousHorizontalPadding(false);
+            seekToTicks(0, { snapScroll: true, keepPlaying: false });
 
             const numParts = Object.keys(state.parts).length;
             const numBars = state.barData.length;
@@ -2696,9 +2847,10 @@
         const box = dom.scoreDisplayArea;
         if (event.offsetX > box.clientWidth || event.offsetY > box.clientHeight) return;
 
-        const rect = box.getBoundingClientRect();
-        const clickX = (event.clientX - rect.left) + box.scrollLeft;
-        const clickY = (event.clientY - rect.top) + box.scrollTop;
+        const innerEl = box.querySelector('.osmd-score-inner') || box;
+        const innerRect = innerEl.getBoundingClientRect();
+        const clickX = event.clientX - innerRect.left;
+        const clickY = event.clientY - innerRect.top;
 
         let bestStep = null;
         let bestDist = Infinity;
@@ -2725,7 +2877,7 @@
         }
 
         if (bestStep) {
-            seekToTicks(bestStep.ticks, { snapScroll: false, keepPlaying: state.isPlaying });
+            seekToTicks(bestStep.ticks, { snapScroll: true, keepPlaying: state.isPlaying });
         }
     }
 
@@ -2918,7 +3070,10 @@
 
     function bindEvents() {
         // File Open buttons
-        const triggerOpen = () => dom.fileInput && dom.fileInput.click();
+        const triggerOpen = (e) => {
+            if (e) e.stopPropagation();
+            if (dom.fileInput) dom.fileInput.click();
+        };
         if (dom.loadScoreButton) dom.loadScoreButton.addEventListener('click', triggerOpen);
         if (dom.welcomeOpenBtn) dom.welcomeOpenBtn.addEventListener('click', triggerOpen);
 
@@ -2931,13 +3086,15 @@
         }
 
         if (dom.loadDemoScoreBtn) {
-            dom.loadDemoScoreBtn.addEventListener('click', () => {
+            dom.loadDemoScoreBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 loadMusicXMLContent(getDemoChoraleMusicXML(), 'Chorale in C Major (SATB)');
             });
         }
 
         if (dom.loadDemoEnsembleBtn) {
-            dom.loadDemoEnsembleBtn.addEventListener('click', () => {
+            dom.loadDemoEnsembleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 loadMusicXMLContent(getDemoEnsembleMusicXML(), 'Quartet in G Major (Fl/Ob/Vln/Vc)');
             });
         }
@@ -3138,11 +3295,23 @@
         // Click on Score to Jump Cursor
         if (dom.scoreDisplayArea) {
             let pointerDownPos = null;
+            const isInteractiveWelcomeTarget = (target) => {
+                if (!target || typeof target.closest !== 'function') return false;
+                return Boolean(target.closest('#scorePlaceholder, .empty-state, .score-loading-state, .score-error-state, button, a, input, select'));
+            };
+
             dom.scoreDisplayArea.addEventListener('pointerdown', (e) => {
+                if (!state.scoreLoaded || isInteractiveWelcomeTarget(e.target)) {
+                    pointerDownPos = null;
+                    return;
+                }
                 pointerDownPos = { x: e.clientX, y: e.clientY };
             });
             dom.scoreDisplayArea.addEventListener('click', (e) => {
-                if (!pointerDownPos) return;
+                if (!state.scoreLoaded || !pointerDownPos || isInteractiveWelcomeTarget(e.target)) {
+                    pointerDownPos = null;
+                    return;
+                }
                 const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
                 pointerDownPos = null;
                 if (moved > 6) return; // Ignore drags / text selection
@@ -3155,6 +3324,15 @@
             dom.masterVolumeSlider.addEventListener('input', () => {
                 state.masterVolume = parseInt(dom.masterVolumeSlider.value, 10);
                 if (state.masterVolume > 0 && state.masterMuted) {
+                    state.masterMuted = false;
+                }
+                applyMasterVolume();
+            });
+
+            dom.masterVolumeSlider.addEventListener('dblclick', () => {
+                state.masterVolume = CONFIG.DEFAULT_PART_VOLUME;
+                dom.masterVolumeSlider.value = String(CONFIG.DEFAULT_PART_VOLUME);
+                if (state.masterMuted) {
                     state.masterMuted = false;
                 }
                 applyMasterVolume();
@@ -3227,7 +3405,12 @@
                 }
                 dom.cursorTypeSelect.value = String(opensheetmusicdisplay.CursorType.ThinLeft ?? 1);
             }
-            dom.cursorTypeSelect.addEventListener('change', applyCursorStyle);
+            dom.cursorTypeSelect.addEventListener('change', () => {
+                applyCursorStyle();
+                if (state.scoreLoaded && state.cursorSteps.length > 0) {
+                    updateCameraForTicks(state.isPlaying ? state.smoothTicks : state.currentTicks, 0, true);
+                }
+            });
         }
 
         // Reset Mixer button (Restores volume, mute/solo, AND score-default instruments!)
@@ -3252,7 +3435,7 @@
             });
         }
 
-        // Responsive Window Resize (Debounced: re-align bar ticks, and re-render Page View only on width change)
+        // Responsive Window Resize (Debounced: re-align bar ticks, update Continuous View centering, or re-render Page View)
         let resizeTimer = null;
         let lastBoxWidth = dom.scoreDisplayArea ? dom.scoreDisplayArea.clientWidth : 0;
         window.addEventListener('resize', () => {
@@ -3260,11 +3443,16 @@
             resizeTimer = window.setTimeout(() => {
                 renderBarTickMarks();
                 updateLoopTrackHighlight();
-                if (state.scoreLoaded && !state.continuousScrollMode && dom.scoreDisplayArea) {
-                    const newW = dom.scoreDisplayArea.clientWidth;
-                    if (Math.abs(newW - lastBoxWidth) > 24) {
-                        lastBoxWidth = newW;
-                        reRenderScorePreservingState();
+                if (state.scoreLoaded && dom.scoreDisplayArea) {
+                    if (state.continuousScrollMode) {
+                        updateContinuousHorizontalPadding(false);
+                        updateCameraForTicks(state.isPlaying ? state.smoothTicks : state.currentTicks, 0, true);
+                    } else {
+                        const newW = dom.scoreDisplayArea.clientWidth;
+                        if (Math.abs(newW - lastBoxWidth) > 24) {
+                            lastBoxWidth = newW;
+                            reRenderScorePreservingState();
+                        }
                     }
                 }
             }, 220);
