@@ -14,6 +14,7 @@
         AUDIO_SAMPLES_BASE_URL: 'https://tonejs.github.io/audio/salamander/',
         DEFAULT_BPM: 100,
         DEFAULT_TEMPO_PERCENT: 100,
+        DEFAULT_PART_VOLUME: 80,
         MIN_TEMPO_PERCENT: 25,
         MAX_TEMPO_PERCENT: 200,
         MIN_ZOOM: 0.5,
@@ -742,7 +743,7 @@
                     nextParts[partId] = {
                         id: partId,
                         name: partName,
-                        volume: prev ? prev.volume : 100,
+                        volume: prev ? prev.volume : CONFIG.DEFAULT_PART_VOLUME,
                         muted: prev ? prev.muted : false,
                         soloed: prev ? prev.soloed : false,
                         gainNode: prev ? prev.gainNode : null,
@@ -804,7 +805,7 @@
                         nextParts[partId] = {
                             id: partId,
                             name: partName,
-                            volume: prev ? prev.volume : 100,
+                            volume: prev ? prev.volume : CONFIG.DEFAULT_PART_VOLUME,
                             muted: prev ? prev.muted : false,
                             soloed: prev ? prev.soloed : false,
                             gainNode: prev ? prev.gainNode : null,
@@ -1489,7 +1490,7 @@
     function updateResetMixerVisibility() {
         if (!dom.resetMixerBtn) return;
         const partList = Object.values(state.parts);
-        const isModified = partList.some((p) => p.muted || p.soloed || p.volume !== 100);
+        const isModified = partList.some((p) => p.muted || p.soloed || p.volume !== CONFIG.DEFAULT_PART_VOLUME);
         dom.resetMixerBtn.hidden = !isModified;
     }
 
@@ -2146,7 +2147,7 @@
         if (dom.resetMixerBtn) {
             dom.resetMixerBtn.addEventListener('click', () => {
                 for (const part of Object.values(state.parts)) {
-                    part.volume = 100;
+                    part.volume = CONFIG.DEFAULT_PART_VOLUME;
                     part.muted = false;
                     part.soloed = false;
                 }
