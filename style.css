@@ -124,6 +124,19 @@ select {
     gap: 7px;
     user-select: none;
     flex-shrink: 0;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.15s ease, transform 0.08s ease;
+}
+
+.brand-lockup:hover {
+    background: var(--surface-hover);
+}
+
+.brand-lockup:active {
+    transform: scale(0.97);
 }
 
 .brand-badge {
@@ -437,6 +450,8 @@ select {
     box-shadow: var(--shadow-md);
     overflow-x: auto;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     /* IMPORTANT: No CSS scroll-behavior: smooth here!
        Smooth 60fps scrolling is driven directly by JS requestAnimationFrame
        so rapid updates never fight or cancel browser scroll animations. */

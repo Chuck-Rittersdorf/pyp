@@ -506,6 +506,7 @@
     // ===========================================
 
     const dom = {
+        brandHomeBtn: document.getElementById('brandHomeBtn'),
         loadScoreButton: document.getElementById('loadScoreButton'),
         welcomeOpenBtn: document.getElementById('welcomeOpenBtn'),
         loadDemoScoreBtn: document.getElementById('loadDemoScoreBtn'),
@@ -567,6 +568,9 @@
         resetMixerBtn: document.getElementById('resetMixerBtn'),
     };
 
+    // Preserve initial welcome screen markup so clicking the PYP logo can reset cleanly to Home
+    const initialWelcomeMarkup = dom.scoreDisplayArea ? dom.scoreDisplayArea.innerHTML : '';
+
     // ===========================================
     // APPLICATION STATE
     // ===========================================
@@ -585,10 +589,12 @@
         totalMusicalTicks: 0,
         currentTicks: 0,
         smoothTicks: 0,
+        playbackStartTicks: 0,
         scoreEndX: 0,
         continuousPadX: 0,
         cameraScrollX: 0,
         isCameraGliding: false,
+        highlightedStaffBands: [],
         audioReadyPromise: null,
         auditionRestoreTimer: null,
         baseScoreBpm: CONFIG.DEFAULT_BPM,
@@ -1205,7 +1211,7 @@
             }
             part.instrument = new Tone.Sampler({
                 urls: bufferMap,
-                attack: def.attack ?? 0.01,
+                attack: 0.002,
                 release: def.release ?? 0.5,
                 volume: def.volumeDb ?? -2,
             }).connect(targetDest);
@@ -1314,6 +1320,13 @@
             try {
                 if (!state.audioInitialized) {
                     await Tone.start();
+                    // Minimize scheduling lookahead (default 100ms -> 30ms) for snappy mobile & desktop sync
+                    try {
+                        const ctx = typeof Tone.getContext === 'function' ? Tone.getContext() : Tone.context;
+                        if (ctx && typeof ctx.lookAhead === 'number') {
+                            ctx.lookAhead = 0.03;
+                        }
+                    } catch (_) { /* ignore */ }
                     ensureMasterAudioChain();
                     state.audioInitialized = true;
                 }
@@ -2126,29 +2139,34 @@
                 }
             }
 
-            // Ensure vertical scroll keeps the staff visible
-            const viewportH = box.clientHeight;
-            if (box.scrollHeight > viewportH + 4) {
-                const desiredY = Math.max(0, curr.y - viewportH * 0.2);
-                if (snap) {
-                    box.scrollTop = desiredY;
-                } else {
-                    const alphaY = 1 - Math.exp(-10 * Math.min(dt, 0.05));
-                    box.scrollTop = box.scrollTop + (desiredY - box.scrollTop) * alphaY;
-                }
+            // Vertical scroll: ONLY auto-center vertically when a part is highlighted ('H')!
+            // When no part is highlighted, leave box.scrollTop completely untouched so mobile & desktop
+            // users can scroll vertically without ever rubberbanding back to the top.
+            if (state.highlightedStaffBands && state.highlightedStaffBands.length > 0) {
+                updateVerticalCenteringForHighlight(snap, dt);
             }
         } else {
-            // Page View: scroll vertically when cursor moves out of comfortable middle band
+            // Page View: if a part is highlighted, keep the active system's highlighted staff vertically centered
+            if (state.highlightedStaffBands && state.highlightedStaffBands.length > 0) {
+                updateVerticalCenteringForHighlight(snap, dt);
+                return;
+            }
+
+            // Page View without highlight: only scroll vertically when cursor moves out of visible viewport band
+            if (keepViewport) return;
             const viewportH = box.clientHeight;
             const maxScrollY = Math.max(0, box.scrollHeight - viewportH);
             const desiredY = Math.max(0, Math.min(maxScrollY, curr.y - viewportH * CONFIG.PAGE_SCROLL_TOP_ANCHOR));
 
             if (snap) {
-                box.scrollTop = desiredY;
+                const isCurrVisible = curr.y >= box.scrollTop + 16 && (curr.y + curr.height) <= (box.scrollTop + viewportH - 16);
+                if (!isCurrVisible || state.currentTicks === 0) {
+                    box.scrollTop = desiredY;
+                }
                 state.pageScrollTargetY = null;
-            } else {
-                const topLimit = box.scrollTop + viewportH * 0.12;
-                const bottomLimit = box.scrollTop + viewportH * 0.74 - curr.height;
+            } else if (state.isPlaying) {
+                const topLimit = box.scrollTop + viewportH * 0.10;
+                const bottomLimit = box.scrollTop + viewportH * 0.78 - curr.height;
                 if (curr.y < topLimit || curr.y > bottomLimit) {
                     state.pageScrollTargetY = desiredY;
                 }
@@ -2167,6 +2185,34 @@
         }
     }
 
+    /**
+     * Computes the exact musical tick of the audio currently leaving the device speaker.
+     * Compensates for Tone.js scheduling lookAhead + Web Audio hardware baseLatency/outputLatency
+     * so the visual cursor never leads ahead of the sound on mobile or desktop devices.
+     */
+    function getAudibleTransportTicks() {
+        const rawTicks = Math.max(0, Tone.Transport.ticks);
+        if (!state.audioInitialized) return rawTicks;
+
+        const ctx = (typeof Tone.getContext === 'function' ? Tone.getContext() : Tone.context) || {};
+        const rawCtx = ctx.rawContext || ctx._context || ctx;
+        const lookAheadSec = typeof ctx.lookAhead === 'number' ? ctx.lookAhead : 0.03;
+        const baseLat = typeof rawCtx?.baseLatency === 'number' ? rawCtx.baseLatency : 0.012;
+        const outLat = typeof rawCtx?.outputLatency === 'number' ? rawCtx.outputLatency : 0;
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        const hardwareLatSec = outLat > 0
+            ? (baseLat + outLat)
+            : (baseLat + (isMobile ? 0.065 : 0.018));
+
+        const totalLatencySec = lookAheadSec + hardwareLatSec;
+        const liveBpm = getEffectiveBpm();
+        const ppq = state.ticksPerWhole / 4;
+        const latencyTicks = totalLatencySec * (liveBpm / 60) * ppq;
+
+        const floorTick = state.playbackStartTicks ?? 0;
+        return Math.max(floorTick, rawTicks - latencyTicks);
+    }
+
     // ===========================================
     // 60 FPS PLAYBACK LOOP (AUDIO = SOURCE OF TRUTH)
     // ===========================================
@@ -2180,11 +2226,12 @@
         state.lastFrameTime = timestamp;
 
         const rawTicks = Math.max(0, Tone.Transport.ticks);
+        const audibleTicks = getAudibleTransportTicks();
 
         // 1. Handle A-B Bar Loop seamlessly
         if (state.loopEnabled && state.barData.length > 0) {
             const { startTicks, endTicks } = getLoopBoundsTicks();
-            if (rawTicks >= endTicks - 2) {
+            if (audibleTicks >= endTicks - 2) {
                 jumpTransportWhilePlaying(startTicks);
                 state.rafId = requestAnimationFrame(playbackFrameLoop);
                 return;
@@ -2192,38 +2239,37 @@
         }
 
         // 2. Handle End of Piece cleanly: stop and reset cursor back to the beginning
-        if (rawTicks >= state.totalMusicalTicks) {
+        if (audibleTicks >= state.totalMusicalTicks) {
             stopAtEndOfPiece();
             return;
         }
 
-        state.currentTicks = rawTicks;
+        state.currentTicks = audibleTicks;
 
         // 3. Apply mid-score tempo changes if crossing into a bar with a new base BPM
-        const currentBar = getBarObjAtTicks(rawTicks);
+        const currentBar = getBarObjAtTicks(audibleTicks);
         if (currentBar && currentBar.bpm !== state.activeBarBaseBpm) {
             state.activeBarBaseBpm = currentBar.bpm;
             Tone.Transport.bpm.value = getEffectiveBpm();
             updateTempoReadoutUI();
         }
 
-        // 4. Advance high-res floating-point ticks phase-locked to Tone.Transport.ticks
-        //    (Eliminates integer tick quantization and 128-sample Web Audio block stepping!)
+        // 4. Advance high-res floating-point ticks phase-locked to latency-compensated audibleTicks
         const liveBpm = getEffectiveBpm();
         const ppq = state.ticksPerWhole / 4;
         const ticksPerSec = (liveBpm / 60) * ppq;
         state.smoothTicks += dt * ticksPerSec;
 
-        const drift = rawTicks - state.smoothTicks;
+        const drift = audibleTicks - state.smoothTicks;
         if (Math.abs(drift) > ppq * 0.45) {
-            state.smoothTicks = rawTicks;
+            state.smoothTicks = audibleTicks;
         } else {
-            state.smoothTicks += drift * Math.min(1, dt * 10);
+            state.smoothTicks += drift * Math.min(1, dt * 12);
         }
-        state.smoothTicks = Math.max(0, Math.min(state.totalMusicalTicks, state.smoothTicks));
+        state.smoothTicks = Math.max(state.playbackStartTicks ?? 0, Math.min(state.totalMusicalTicks, state.smoothTicks));
 
-        // 5. Advance OSMD step & note highlight on beat boundaries
-        const targetStep = getStepIndexAtTicks(rawTicks);
+        // 5. Advance OSMD step & note highlight on exact audible beat boundaries
+        const targetStep = getStepIndexAtTicks(audibleTicks);
         moveCursorToStep(targetStep);
 
         // 6. Smooth 60fps+ MuseScore-style panning with cursor centered
@@ -2231,7 +2277,7 @@
 
         // 7. Update timeline slider & bar display
         if (!state.isSliderDragging) {
-            updateTimelineReadout(rawTicks);
+            updateTimelineReadout(audibleTicks);
         }
 
         state.rafId = requestAnimationFrame(playbackFrameLoop);
@@ -2276,6 +2322,7 @@
         Tone.Transport.ticks = targetTicks;
         state.currentTicks = targetTicks;
         state.smoothTicks = targetTicks;
+        state.playbackStartTicks = targetTicks;
         scheduleToneParts();
 
         const targetStep = getStepIndexAtTicks(targetTicks);
@@ -2334,6 +2381,7 @@
         // Sync cursor & transport to startTicks
         state.currentTicks = startTicks;
         state.smoothTicks = startTicks;
+        state.playbackStartTicks = startTicks;
         const startStep = getStepIndexAtTicks(startTicks);
         moveCursorToStep(startStep);
 
@@ -2683,8 +2731,11 @@
                 .map((p) => p.id)
         );
 
+        state.highlightedStaffBands = [];
+
         if (!state.scoreLoaded || !state.osmd || highlightedPartIds.size === 0) {
             if (layer) layer.remove();
+            updateVerticalCenteringForHighlight(true);
             return;
         }
 
@@ -2759,6 +2810,11 @@
                         band.style.width = `${widthPx.toFixed(1)}px`;
                         band.style.height = `${heightPx.toFixed(1)}px`;
                         frag.appendChild(band);
+                        state.highlightedStaffBands.push({
+                            topPx,
+                            heightPx,
+                            centerY: topPx + heightPx * 0.5,
+                        });
                         bandsAdded++;
                     }
                 }
@@ -2791,17 +2847,91 @@
                 }
             }
             for (const b of rowBounds.values()) {
+                const topPx = Math.max(0, (b.y - 1.35) * unitToPx);
+                const heightPx = (b.h + 2.7) * unitToPx;
                 const band = document.createElement('div');
                 band.className = 'staff-marker-band';
                 band.style.left = `${Math.max(0, (b.minX - 0.6) * unitToPx).toFixed(1)}px`;
-                band.style.top = `${Math.max(0, (b.y - 1.35) * unitToPx).toFixed(1)}px`;
+                band.style.top = `${topPx.toFixed(1)}px`;
                 band.style.width = `${((b.maxX - b.minX + 1.2) * unitToPx).toFixed(1)}px`;
-                band.style.height = `${((b.h + 2.7) * unitToPx).toFixed(1)}px`;
+                band.style.height = `${heightPx.toFixed(1)}px`;
                 frag.appendChild(band);
+                state.highlightedStaffBands.push({
+                    topPx,
+                    heightPx,
+                    centerY: topPx + heightPx * 0.5,
+                });
             }
         }
 
         layer.appendChild(frag);
+        updateVerticalCenteringForHighlight(true);
+    }
+
+    /**
+     * Vertically centers the currently highlighted part's staff in the middle of the score viewport.
+     * Adds dynamic top/bottom padding to `.osmd-score-track` only when a part is highlighted so even
+     * the top-most or bottom-most staff can sit in the exact vertical center. When no part is
+     * highlighted, removes vertical padding and leaves `box.scrollTop` untouched for free scrolling.
+     */
+    function updateVerticalCenteringForHighlight(snap = true, dt = 1 / 60) {
+        const box = dom.scoreDisplayArea;
+        const track = box ? box.querySelector('.osmd-score-track') : null;
+        const inner = box ? box.querySelector('.osmd-score-inner') : null;
+        if (!box || !track) return;
+
+        const bands = state.highlightedStaffBands;
+        if (!bands || bands.length === 0) {
+            track.style.paddingTop = '0px';
+            track.style.paddingBottom = '0px';
+            return;
+        }
+
+        // Pick the highlighted staff band on the active system (closest to current cursor step Y)
+        const currStep = state.cursorSteps[state.currentStepIndex];
+        let targetBand = bands[0];
+        if (currStep && bands.length > 1) {
+            const currMidY = currStep.y + currStep.height * 0.5;
+            let bestDist = Infinity;
+            for (const b of bands) {
+                const dist = Math.abs(b.centerY - currMidY);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    targetBand = b;
+                }
+            }
+        }
+
+        const viewportH = box.clientHeight;
+        if (viewportH <= 0) return;
+        const halfH = viewportH * 0.5;
+        const innerH = inner ? inner.offsetHeight : box.scrollHeight;
+        const bandCenterY = targetBand.centerY;
+
+        const padTop = Math.max(0, Math.round(halfH - bandCenterY));
+        const padBottom = Math.max(0, Math.round(halfH - Math.max(0, innerH - bandCenterY)));
+
+        if (track.style.paddingTop !== `${padTop}px`) {
+            track.style.paddingTop = `${padTop}px`;
+        }
+        if (track.style.paddingBottom !== `${padBottom}px`) {
+            track.style.paddingBottom = `${padBottom}px`;
+        }
+
+        const maxScrollY = Math.max(0, box.scrollHeight - viewportH);
+        const desiredY = Math.max(0, Math.min(maxScrollY, Math.round((padTop + bandCenterY) - halfH)));
+
+        if (snap) {
+            box.scrollTop = desiredY;
+        } else {
+            const diffY = desiredY - box.scrollTop;
+            if (Math.abs(diffY) <= 1) {
+                box.scrollTop = desiredY;
+            } else {
+                const alphaY = 1 - Math.exp(-12 * Math.min(dt, 0.05));
+                box.scrollTop = box.scrollTop + diffY * alphaY;
+            }
+        }
     }
 
     function buildPartInstrumentSelect(part) {
@@ -3508,14 +3638,112 @@
     // EVENT LISTENERS
     // ===========================================
 
+    function bindWelcomeScreenActions() {
+        const welcomeOpenBtn = document.getElementById('welcomeOpenBtn');
+        const demoChoraleBtn = document.getElementById('loadDemoScoreBtn');
+        const demoEnsembleBtn = document.getElementById('loadDemoEnsembleBtn');
+
+        if (welcomeOpenBtn) {
+            welcomeOpenBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (dom.fileInput) dom.fileInput.click();
+            });
+        }
+        if (demoChoraleBtn) {
+            demoChoraleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                loadMusicXMLContent(getDemoChoraleMusicXML(), 'Chorale in C Major (SATB)');
+            });
+        }
+        if (demoEnsembleBtn) {
+            demoEnsembleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                loadMusicXMLContent(getDemoEnsembleMusicXML(), 'Quartet in G Major (Fl/Ob/Vln/Vc)');
+            });
+        }
+    }
+
+    function resetAppToHome() {
+        if (state.auditionRestoreTimer) {
+            window.clearTimeout(state.auditionRestoreTimer);
+            state.auditionRestoreTimer = null;
+        }
+        if (state.isPlaying) {
+            pausePlayback(false);
+        }
+        if (state.audioInitialized) {
+            Tone.Transport.stop();
+            Tone.Transport.ticks = 0;
+        }
+        releaseAllInstruments();
+        disposeToneParts();
+        disposePartAudioNodes();
+        clearAllNoteHighlights();
+
+        state.osmd = null;
+        state.scoreLoaded = false;
+        state.scoreTitle = '';
+        state.rawXmlPartMeta = {};
+        state.parts = {};
+        state.notes = [];
+        state.cursorSteps = [];
+        state.barData = [];
+        state.metronomeBeats = [];
+        state.highlightedStaffBands = [];
+        state.totalMusicalTicks = 0;
+        state.currentTicks = 0;
+        state.smoothTicks = 0;
+        state.playbackStartTicks = 0;
+        state.currentStepIndex = 0;
+        state.loopEnabled = false;
+        state.loopStartBar = 1;
+        state.loopEndBar = 4;
+        state.baseScoreBpm = CONFIG.DEFAULT_BPM;
+        state.activeBarBaseBpm = CONFIG.DEFAULT_BPM;
+        state.tempoPercent = CONFIG.DEFAULT_TEMPO_PERCENT;
+        state.zoom = 1.0;
+        state.soundPreset = 'auto';
+
+        if (dom.soundSelect) dom.soundSelect.value = 'auto';
+        if (dom.zoomResetBtn) dom.zoomResetBtn.textContent = '100%';
+        if (dom.fileInput) dom.fileInput.value = '';
+
+        if (dom.scoreDisplayArea) {
+            dom.scoreDisplayArea.classList.remove('score-loaded');
+            dom.scoreDisplayArea.innerHTML = initialWelcomeMarkup;
+            dom.scoreDisplayArea.scrollLeft = 0;
+            dom.scoreDisplayArea.scrollTop = 0;
+            bindWelcomeScreenActions();
+        }
+
+        updateScoreTitleUI();
+        setScoreControlsEnabled(false);
+        syncLoopInputsUI();
+        updateTempoReadoutUI();
+        setupTimelineUI();
+        renderPartMixerUI();
+    }
+
     function bindEvents() {
+        // PYP Brand Logo -> Return to Home Screen (Reset App)
+        if (dom.brandHomeBtn) {
+            dom.brandHomeBtn.addEventListener('click', () => {
+                resetAppToHome();
+            });
+            dom.brandHomeBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    resetAppToHome();
+                }
+            });
+        }
+
         // File Open buttons
         const triggerOpen = (e) => {
             if (e) e.stopPropagation();
             if (dom.fileInput) dom.fileInput.click();
         };
         if (dom.loadScoreButton) dom.loadScoreButton.addEventListener('click', triggerOpen);
-        if (dom.welcomeOpenBtn) dom.welcomeOpenBtn.addEventListener('click', triggerOpen);
 
         if (dom.fileInput) {
             dom.fileInput.addEventListener('change', (e) => {
@@ -3525,19 +3753,7 @@
             });
         }
 
-        if (dom.loadDemoScoreBtn) {
-            dom.loadDemoScoreBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                loadMusicXMLContent(getDemoChoraleMusicXML(), 'Chorale in C Major (SATB)');
-            });
-        }
-
-        if (dom.loadDemoEnsembleBtn) {
-            dom.loadDemoEnsembleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                loadMusicXMLContent(getDemoEnsembleMusicXML(), 'Quartet in G Major (Fl/Ob/Vln/Vc)');
-            });
-        }
+        bindWelcomeScreenActions();
 
         // Drag & Drop support
         if (window.PYP_UX && typeof window.PYP_UX.initDropZone === 'function') {
