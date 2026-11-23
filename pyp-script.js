@@ -586,6 +586,9 @@
         scoreEndX: 0,
         continuousPadX: 0,
         cameraScrollX: 0,
+        isCameraGliding: false,
+        audioReadyPromise: null,
+        auditionRestoreTimer: null,
         baseScoreBpm: CONFIG.DEFAULT_BPM,
         activeBarBaseBpm: CONFIG.DEFAULT_BPM,
         tempoPercent: CONFIG.DEFAULT_TEMPO_PERCENT,
@@ -1301,43 +1304,48 @@
     }
 
     async function ensureAudioReady() {
-        if (state.isLoadingAudio) return false;
+        if (state.audioReadyPromise) return state.audioReadyPromise;
         state.isLoadingAudio = true;
         updatePlayPauseButtonUI();
 
-        try {
-            if (!state.audioInitialized) {
-                await Tone.start();
-                ensureMasterAudioChain();
-                state.audioInitialized = true;
+        state.audioReadyPromise = (async () => {
+            try {
+                if (!state.audioInitialized) {
+                    await Tone.start();
+                    ensureMasterAudioChain();
+                    state.audioInitialized = true;
+                }
+
+                // Ensure all currently selected part instruments have their buffers loaded & nodes built
+                const partsList = Object.values(state.parts);
+                const anyMissingBuffer = partsList.some((p) => {
+                    const def = INSTRUMENT_CATALOG[p.patchId || 'piano'];
+                    return def?.urls && !state.instrumentBuffers[p.patchId] && !state.instrumentFailed[p.patchId];
+                });
+                const anyMissingNode = partsList.some((p) => !p.instrument || !p.gainNode);
+
+                if (anyMissingBuffer || anyMissingNode) {
+                    await loadAndBuildAllPartInstruments();
+                }
+
+                applyMasterVolume();
+                return true;
+            } catch (err) {
+                console.error('[PYP] Failed to initialize audio:', err);
+                toast('Audio initialization failed. Try clicking Play again.', 'error');
+                return false;
+            } finally {
+                state.isLoadingAudio = false;
+                state.audioReadyPromise = null;
+                updatePlayPauseButtonUI();
             }
+        })();
 
-            // Ensure all currently selected part instruments have their buffers loaded & nodes built
-            const partsList = Object.values(state.parts);
-            const anyMissingBuffer = partsList.some((p) => {
-                const def = INSTRUMENT_CATALOG[p.patchId || 'piano'];
-                return def?.urls && !state.instrumentBuffers[p.patchId] && !state.instrumentFailed[p.patchId];
-            });
-            const anyMissingNode = partsList.some((p) => !p.instrument || !p.gainNode);
-
-            if (anyMissingBuffer || anyMissingNode) {
-                await loadAndBuildAllPartInstruments();
-            }
-
-            applyMasterVolume();
-            return true;
-        } catch (err) {
-            console.error('[PYP] Failed to initialize audio:', err);
-            toast('Audio initialization failed. Try clicking Play again.', 'error');
-            return false;
-        } finally {
-            state.isLoadingAudio = false;
-            updatePlayPauseButtonUI();
-        }
+        return state.audioReadyPromise;
     }
 
     // ===========================================
-    // NOTE HIGHLIGHTING (SAFE & CLEAN)
+    // NOTE HIGHLIGHTING & CLICK AUDITIONING
     // ===========================================
 
     function clearAllNoteHighlights() {
@@ -1349,8 +1357,13 @@
         state.highlightedElements.clear();
     }
 
-    function highlightStepNotes(stepIdx) {
+    function highlightStepNotes(stepIdx, specificSvgEl = null) {
         clearAllNoteHighlights();
+        if (specificSvgEl && specificSvgEl.classList) {
+            specificSvgEl.classList.add('note-highlighted');
+            state.highlightedElements.add(specificSvgEl);
+            return;
+        }
         const step = state.cursorSteps[stepIdx];
         if (!step || !step.svgNotes) return;
         for (const svgEl of step.svgNotes) {
@@ -1359,6 +1372,50 @@
                 state.highlightedElements.add(svgEl);
             }
         }
+    }
+
+    async function auditionClickedNote(noteItem) {
+        if (!noteItem || state.isPlaying) return;
+
+        const ready = await ensureAudioReady();
+        if (!ready || state.isPlaying) return;
+
+        const part = state.parts[noteItem.partId] || Object.values(state.parts)[0];
+        if (!part || !part.instrument) return;
+
+        if (state.auditionRestoreTimer) {
+            window.clearTimeout(state.auditionRestoreTimer);
+            state.auditionRestoreTimer = null;
+        }
+        releaseAllInstruments();
+
+        // Ensure the clicked note is audible even if the user muted this part in the mixer
+        if (part.gainNode && part.gainNode.gain.value < 0.1) {
+            const auditionGain = Math.max(0.75, (part.volume || CONFIG.DEFAULT_PART_VOLUME) / 100);
+            part.gainNode.gain.setValueAtTime(auditionGain, Tone.now());
+        }
+
+        const freqHz = state.concertPitchHz * Math.pow(2, (noteItem.midi - 69) / 12);
+        const bar = getBarObjAtTicks(noteItem.ticks);
+        const baseBpm = bar ? bar.bpm : state.activeBarBaseBpm;
+        const liveBpm = Math.max(10, baseBpm * (state.tempoPercent / 100));
+        const secPerWhole = (60 / liveBpm) * 4;
+        const def = INSTRUMENT_CATALOG[part.patchId] || INSTRUMENT_CATALOG.piano;
+        const durFactor = def.durationFactor ?? 0.95;
+        const durationSec = Math.max(0.14, Math.min(4.0, (noteItem.durationWhole || 0.25) * secPerWhole * durFactor));
+
+        try {
+            part.instrument.triggerAttackRelease(freqHz, durationSec, Tone.now(), 0.85);
+        } catch (err) {
+            console.warn('[PYP] Audition note trigger error:', err);
+        }
+
+        state.auditionRestoreTimer = window.setTimeout(() => {
+            state.auditionRestoreTimer = null;
+            if (!state.isPlaying) {
+                applyAllPartGains(false);
+            }
+        }, Math.round(durationSec * 1000) + 60);
     }
 
     // ===========================================
@@ -1647,8 +1704,10 @@
             const measureIndex = iter.CurrentMeasureIndex ?? 0;
             const coords = readCursorCoords();
 
-            // Capture graphical note SVG elements at this cursor step for clean highlighting
+            // Capture graphical note SVG elements & sourceNote map at this cursor step
             const svgNotes = [];
+            const gNoteBySource = new Map();
+            const clickableNotes = [];
             try {
                 if (typeof osmd.cursor.GNotesUnderCursor === 'function') {
                     const gNotes = osmd.cursor.GNotesUnderCursor();
@@ -1656,21 +1715,13 @@
                         for (const gn of gNotes) {
                             const svgEl = typeof gn.getSVGGElement === 'function' ? gn.getSVGGElement() : null;
                             if (svgEl) svgNotes.push(svgEl);
+                            if (gn && gn.sourceNote) {
+                                gNoteBySource.set(gn.sourceNote, { gn, svgEl });
+                            }
                         }
                     }
                 }
             } catch (_) { /* optional highlight */ }
-
-            cursorSteps.push({
-                stepIdx,
-                ticks,
-                realValue,
-                measureIndex,
-                x: coords.x,
-                y: coords.y,
-                height: coords.height,
-                svgNotes,
-            });
 
             const voiceEntries = iter.CurrentVoiceEntries;
             if (voiceEntries) {
@@ -1713,8 +1764,31 @@
                     for (const note of ve.Notes) {
                         if (note.isRest() || !note.Pitch || note.isGrace) continue;
 
-                        // Handle tied notes: skip continuation notes and sum duration on the start note
-                        let durationWhole = note.Length?.RealValue ?? 0;
+                        const writtenDurationWhole = note.Length?.RealValue ?? 0;
+                        if (writtenDurationWhole <= 0.0005) continue;
+
+                        const midi = extractMidiNote(note);
+                        if (midi === null) continue;
+
+                        // Record every visible pitched notehead (including tied continuations) for click selection & auditioning
+                        const gEntry = gNoteBySource.get(note);
+                        const pos = gEntry?.gn?.PositionAndShape?.AbsolutePosition;
+                        const noteX = (pos && typeof pos.x === 'number') ? (pos.x * 10 * state.zoom) : (coords.x + 6 * state.zoom);
+                        const noteY = (pos && typeof pos.y === 'number') ? (pos.y * 10 * state.zoom) : null;
+
+                        clickableNotes.push({
+                            stepIdx,
+                            ticks,
+                            midi,
+                            durationWhole: writtenDurationWhole,
+                            partId,
+                            svgEl: gEntry?.svgEl || null,
+                            noteX,
+                            noteY,
+                        });
+
+                        // For scheduled playback: skip tied continuation notes and sum full tied duration on the start note
+                        let durationWhole = writtenDurationWhole;
                         if (note.NoteTie) {
                             if (note.NoteTie.StartNote !== note) {
                                 continue;
@@ -1726,11 +1800,6 @@
                                 );
                             }
                         }
-
-                        if (durationWhole <= 0.0005) continue;
-
-                        const midi = extractMidiNote(note);
-                        if (midi === null) continue;
 
                         const noteEndTicks = ticks + realValueToTicks(durationWhole);
                         if (noteEndTicks > maxNoteEndTicks) {
@@ -1748,6 +1817,23 @@
                     }
                 }
             }
+
+            const hitX = clickableNotes.length > 0
+                ? (clickableNotes.reduce((sum, cn) => sum + cn.noteX, 0) / clickableNotes.length)
+                : (coords.x + 6 * state.zoom);
+
+            cursorSteps.push({
+                stepIdx,
+                ticks,
+                realValue,
+                measureIndex,
+                x: coords.x,
+                hitX,
+                y: coords.y,
+                height: coords.height,
+                svgNotes,
+                clickableNotes,
+            });
 
             osmd.cursor.next();
             stepIdx++;
@@ -1951,7 +2037,7 @@
         }
     }
 
-    function updateCameraForTicks(nowTicks, dt, snap = false) {
+    function updateCameraForTicks(nowTicks, dt, snap = false, keepViewport = false) {
         const box = dom.scoreDisplayArea;
         const steps = state.cursorSteps;
         if (!box || !steps.length) return;
@@ -1965,7 +2051,6 @@
             const interpX = getInterpolatedCursorX(nowTicks);
 
             // Glide the cursor element smoothly with the interpolated playhead
-            // so the cursor stays locked in the middle while the score glides right-to-left
             const cursorEl = state.osmd?.cursor?.cursorElement;
             const cursorType = getCurrentCursorType();
             const isMeasureCursor = cursorType === 3 || cursorType === 4;
@@ -1973,12 +2058,36 @@
                 cursorEl.style.left = `${interpX.toFixed(2)}px`;
             }
 
+            if (keepViewport) {
+                // When clicking a note while paused, keep the score paper stationary under the mouse
+                // and mark camera to glide smoothly to center when Play is pressed!
+                state.cameraScrollX = box.scrollLeft;
+                state.isCameraGliding = true;
+                const inner = box.querySelector('.osmd-score-inner');
+                if (inner) inner.style.transform = '';
+                return;
+            }
+
             const viewportW = box.clientWidth;
             const maxScrollX = Math.max(0, box.scrollWidth - viewportW);
             const anchorOffset = viewportW * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X;
             const desiredX = Math.max(0, Math.min(maxScrollX, (state.continuousPadX + interpX) - anchorOffset));
 
-            state.cameraScrollX = desiredX;
+            if (snap) {
+                state.cameraScrollX = desiredX;
+                state.isCameraGliding = false;
+            } else if (state.isCameraGliding) {
+                const diff = desiredX - state.cameraScrollX;
+                if (Math.abs(diff) < 0.75) {
+                    state.cameraScrollX = desiredX;
+                    state.isCameraGliding = false;
+                } else {
+                    const alpha = 1 - Math.exp(-12 * Math.min(dt, 0.05));
+                    state.cameraScrollX += diff * alpha;
+                }
+            } else {
+                state.cameraScrollX = desiredX;
+            }
 
             const intScroll = Math.round(state.cameraScrollX);
             if (box.scrollLeft !== intScroll) {
@@ -2126,7 +2235,11 @@
         updatePlayPauseButtonUI();
     }
 
-    function jumpTransportWhilePlaying(targetTicks) {
+    function jumpTransportWhilePlaying(targetTicks, { glideCamera = false } = {}) {
+        if (state.auditionRestoreTimer) {
+            window.clearTimeout(state.auditionRestoreTimer);
+            state.auditionRestoreTimer = null;
+        }
         releaseAllInstruments();
         clearAllNoteHighlights();
 
@@ -2137,18 +2250,27 @@
             updateTempoReadoutUI();
         }
 
-        // Pause -> set exact ticks -> resume cleanly so Tone.Part re-indexes with zero double-triggers
+        // Pause -> set exact ticks -> rebuild fresh Tone.Part (so backward & forward jumps always trigger!) -> start immediately
         Tone.Transport.pause();
         Tone.Transport.ticks = targetTicks;
         state.currentTicks = targetTicks;
         state.smoothTicks = targetTicks;
+        scheduleToneParts();
 
         const targetStep = getStepIndexAtTicks(targetTicks);
         moveCursorToStep(targetStep);
-        updateCameraForTicks(targetTicks, 0, true);
+        highlightStepNotes(targetStep);
+
+        if (glideCamera && state.continuousScrollMode && dom.scoreDisplayArea) {
+            state.cameraScrollX = dom.scoreDisplayArea.scrollLeft;
+            state.isCameraGliding = true;
+            updateCameraForTicks(targetTicks, 1 / 60, false, false);
+        } else {
+            updateCameraForTicks(targetTicks, 0, true, false);
+        }
         updateTimelineReadout(targetTicks);
 
-        Tone.Transport.start('+0.02');
+        Tone.Transport.start();
     }
 
     // ===========================================
@@ -2162,9 +2284,12 @@
         const ready = await ensureAudioReady();
         if (!ready) return;
 
-        if (!state.playbackPart) {
-            scheduleToneParts();
+        if (state.auditionRestoreTimer) {
+            window.clearTimeout(state.auditionRestoreTimer);
+            state.auditionRestoreTimer = null;
         }
+        releaseAllInstruments();
+        applyAllPartGains(true);
 
         // Determine starting tick
         let startTicks = state.currentTicks;
@@ -2190,14 +2315,20 @@
         state.smoothTicks = startTicks;
         const startStep = getStepIndexAtTicks(startTicks);
         moveCursorToStep(startStep);
-        updateCameraForTicks(startTicks, 0, true);
+
+        // If user clicked a note while paused, glide smoothly to center on playback start
+        if (state.isCameraGliding && state.continuousScrollMode && dom.scoreDisplayArea) {
+            state.cameraScrollX = dom.scoreDisplayArea.scrollLeft;
+            updateCameraForTicks(startTicks, 1 / 60, false, false);
+        } else {
+            updateCameraForTicks(startTicks, 0, true, false);
+        }
         updateTimelineReadout(startTicks);
 
-        if (Tone.Transport.state === 'started') {
-            Tone.Transport.pause();
-        }
+        Tone.Transport.pause();
         Tone.Transport.ticks = startTicks;
-        Tone.Transport.start('+0.03');
+        scheduleToneParts();
+        Tone.Transport.start();
 
         state.isPlaying = true;
         state.lastFrameTime = 0;
@@ -2263,7 +2394,7 @@
         seekToTicks(targetTicks, { snapScroll: true, keepPlaying: wasPlaying });
     }
 
-    function seekToTicks(targetTicks, { snapScroll = true, keepPlaying = state.isPlaying } = {}) {
+    function seekToTicks(targetTicks, { snapScroll = true, keepPlaying = state.isPlaying, keepViewport = false, glideCamera = false } = {}) {
         if (!state.scoreLoaded || !state.cursorSteps.length) return;
 
         const clamped = Math.max(0, Math.min(state.totalMusicalTicks, Math.round(targetTicks)));
@@ -2271,7 +2402,7 @@
         const snappedTicks = state.cursorSteps[targetStep]?.ticks ?? clamped;
 
         if (keepPlaying && state.isPlaying) {
-            jumpTransportWhilePlaying(snappedTicks);
+            jumpTransportWhilePlaying(snappedTicks, { glideCamera });
             return;
         }
 
@@ -2291,7 +2422,7 @@
         }
 
         moveCursorToStep(targetStep);
-        updateCameraForTicks(snappedTicks, 0, snapScroll);
+        updateCameraForTicks(snappedTicks, 0, snapScroll, keepViewport);
         updateTimelineReadout(snappedTicks);
     }
 
@@ -2843,41 +2974,158 @@
 
     function handleScoreClick(event) {
         if (!state.scoreLoaded || !state.cursorSteps.length) return;
-        // Ignore clicks on scrollbars
+
+        // Ignore clicks on scrollbars using viewport-relative coordinates (NOT event.offsetX!)
         const box = dom.scoreDisplayArea;
-        if (event.offsetX > box.clientWidth || event.offsetY > box.clientHeight) return;
+        const boxRect = box.getBoundingClientRect();
+        const relBoxX = event.clientX - boxRect.left;
+        const relBoxY = event.clientY - boxRect.top;
+        if (relBoxX < 0 || relBoxY < 0 || relBoxX > box.clientWidth || relBoxY > box.clientHeight) return;
+
+        // Focus score area so Space / arrow keys immediately control playback
+        box.focus({ preventScroll: true });
 
         const innerEl = box.querySelector('.osmd-score-inner') || box;
         const innerRect = innerEl.getBoundingClientRect();
         const clickX = event.clientX - innerRect.left;
         const clickY = event.clientY - innerRect.top;
 
-        let bestStep = null;
-        let bestDist = Infinity;
+        const clickedSvgGroup = typeof event.target?.closest === 'function'
+            ? event.target.closest('g.vf-stavenote')
+            : null;
 
-        for (const step of state.cursorSteps) {
-            if (state.continuousScrollMode) {
-                const dist = Math.abs(step.x - clickX);
-                if (dist < bestDist) {
-                    bestDist = dist;
+        let bestStep = null;
+        let clickedNote = null;
+
+        // 1. If the user clicked directly on a rendered VexFlow stavenote group, match it immediately
+        if (clickedSvgGroup) {
+            for (const step of state.cursorSteps) {
+                if (!step.clickableNotes) continue;
+                const matchingNotes = step.clickableNotes.filter((cn) => cn.svgEl === clickedSvgGroup);
+                if (matchingNotes.length > 0) {
                     bestStep = step;
-                }
-            } else {
-                // In Page View, strongly prefer steps on the same vertical staff system
-                const stepMidY = step.y + step.height * 0.5;
-                const dy = Math.abs(stepMidY - clickY);
-                const dx = Math.abs(step.x - clickX);
-                const withinSystem = clickY >= (step.y - 24) && clickY <= (step.y + step.height + 24);
-                const weightedDist = withinSystem ? dx : (dy * 12 + dx);
-                if (weightedDist < bestDist) {
-                    bestDist = weightedDist;
-                    bestStep = step;
+                    // If chord shares a stavenote group, pick note closest vertically to clickY
+                    let bestNoteDistY = Infinity;
+                    for (const cn of matchingNotes) {
+                        const dy = cn.noteY !== null ? Math.abs(clickY - cn.noteY) : 0;
+                        if (dy < bestNoteDistY) {
+                            bestNoteDistY = dy;
+                            clickedNote = cn;
+                        }
+                    }
+                    break;
                 }
             }
         }
 
-        if (bestStep) {
-            seekToTicks(bestStep.ticks, { snapScroll: true, keepPlaying: state.isPlaying });
+        // 2. Otherwise, find the closest beat step using actual notehead center X (hitX)
+        if (!bestStep) {
+            let bestDist = Infinity;
+            for (const step of state.cursorSteps) {
+                const stepHitX = step.hitX ?? step.x;
+                if (state.continuousScrollMode) {
+                    const dist = Math.abs(stepHitX - clickX);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestStep = step;
+                    }
+                } else {
+                    // In Page View, strongly prefer steps on the same vertical staff system
+                    const stepMidY = step.y + step.height * 0.5;
+                    const dy = Math.abs(stepMidY - clickY);
+                    const dx = Math.abs(stepHitX - clickX);
+                    const withinSystem = clickY >= (step.y - 28) && clickY <= (step.y + step.height + 28);
+                    const weightedDist = withinSystem ? dx : (dy * 12 + dx);
+                    if (weightedDist < bestDist) {
+                        bestDist = weightedDist;
+                        bestStep = step;
+                    }
+                }
+            }
+
+            // Refine among nearby steps using actual DOM notehead bounding boxes on screen
+            if (bestStep) {
+                const startIdx = Math.max(0, bestStep.stepIdx - 2);
+                const endIdx = Math.min(state.cursorSteps.length - 1, bestStep.stepIdx + 2);
+                let bestBoxScore = Infinity;
+
+                for (let idx = startIdx; idx <= endIdx; idx++) {
+                    const candStep = state.cursorSteps[idx];
+                    if (!state.continuousScrollMode && Math.abs(candStep.y - bestStep.y) > 40) continue;
+                    if (!candStep.clickableNotes || !candStep.clickableNotes.length) continue;
+
+                    for (const cn of candStep.clickableNotes) {
+                        if (!cn.svgEl) continue;
+                        const headEl = cn.svgEl.querySelector('.vf-notehead') || cn.svgEl;
+                        const r = headEl.getBoundingClientRect();
+                        if (r.width <= 0 && r.height <= 0) continue;
+
+                        const cx = (r.left + r.right) * 0.5;
+                        const cy = (r.top + r.bottom) * 0.5;
+                        const dx = Math.abs(event.clientX - cx);
+                        const dy = Math.abs(event.clientY - cy);
+                        // Weight horizontal precision strongly so beat selection is exact, while vertical selects the staff/voice
+                        const score = dx * 2.4 + dy * 0.55;
+                        if (score < bestBoxScore) {
+                            bestBoxScore = score;
+                            bestStep = candStep;
+                            clickedNote = cn;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Ensure we have the closest individual note in bestStep for vertical staff selection & auditioning
+        if (bestStep && !clickedNote && bestStep.clickableNotes && bestStep.clickableNotes.length > 0) {
+            let bestVerticalDist = Infinity;
+            for (const cn of bestStep.clickableNotes) {
+                let dy = Infinity;
+                if (cn.svgEl) {
+                    const headEl = cn.svgEl.querySelector('.vf-notehead') || cn.svgEl;
+                    const r = headEl.getBoundingClientRect();
+                    if (r.height > 0) {
+                        dy = Math.abs(event.clientY - ((r.top + r.bottom) * 0.5));
+                    }
+                }
+                if (!Number.isFinite(dy) && cn.noteY !== null) {
+                    dy = Math.abs(clickY - cn.noteY);
+                }
+                if (dy < bestVerticalDist) {
+                    bestVerticalDist = dy;
+                    clickedNote = cn;
+                }
+            }
+            if (!clickedNote) {
+                clickedNote = bestStep.clickableNotes[0];
+            }
+        }
+
+        if (!bestStep) return;
+
+        // If A-B Loop is active and the user clicked a note outside the loop range, shift loop range to include it
+        if (state.loopEnabled && state.barData.length > 0) {
+            const { startTicks: loopStart, endTicks: loopEnd } = getLoopBoundsTicks();
+            if (bestStep.ticks < loopStart || bestStep.ticks >= loopEnd) {
+                const clickedBarNum = getBarNumberAtTicks(bestStep.ticks);
+                const span = Math.max(0, state.loopEndBar - state.loopStartBar);
+                state.loopStartBar = clickedBarNum;
+                state.loopEndBar = Math.min(state.barData.length, clickedBarNum + span);
+                syncLoopInputsUI();
+            }
+        }
+
+        if (state.isPlaying) {
+            // During playback: jump immediately to the clicked note and continue playing smoothly from there
+            seekToTicks(bestStep.ticks, { snapScroll: false, keepPlaying: true, glideCamera: true });
+        } else {
+            // While paused: place cursor on clicked note without jerking the score away from the mouse,
+            // highlight the selected note, and play its pitch & note value
+            seekToTicks(bestStep.ticks, { snapScroll: false, keepPlaying: false, keepViewport: true });
+            highlightStepNotes(bestStep.stepIdx, clickedNote?.svgEl || null);
+            if (clickedNote) {
+                auditionClickedNote(clickedNote);
+            }
         }
     }
 
@@ -3314,7 +3562,7 @@
                 }
                 const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
                 pointerDownPos = null;
-                if (moved > 6) return; // Ignore drags / text selection
+                if (moved > 18) return; // Ignore large drags / scrollbar drags while tolerating slight hand movement during playback
                 handleScoreClick(e);
             });
         }
@@ -3460,8 +3708,12 @@
 
         // MuseScore-Style Keyboard Shortcuts
         document.addEventListener('keydown', (e) => {
-            const tag = document.activeElement?.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            const activeEl = document.activeElement;
+            const tag = activeEl?.tagName;
+            const isTextInput = tag === 'TEXTAREA' ||
+                (tag === 'INPUT' && activeEl.type !== 'range' && activeEl.type !== 'button' && activeEl.type !== 'checkbox');
+            if (isTextInput) return;
+            if (tag === 'SELECT' && e.key !== ' ') return;
 
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
                 e.preventDefault();
