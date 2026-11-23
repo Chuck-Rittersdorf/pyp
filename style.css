@@ -22,6 +22,9 @@
     --mute-soft: #FEE2E2;
     --solo-color: #D97706;
     --solo-soft: #FEF3C7;
+    --highlight-color: #EAB308;
+    --highlight-soft: #FEF9C3;
+    --highlight-marker: rgba(255, 238, 0, 0.26);
 
     --text-primary: #1E293B;
     --text-secondary: #52657A;
@@ -448,6 +451,8 @@ select {
 .score-display-box > div[id^="osmdSvgPage"],
 .osmd-score-inner > div[id^="osmdCanvasPage"],
 .osmd-score-inner > div[id^="osmdSvgPage"] {
+    position: relative;
+    z-index: 1;
     display: inline-block;
     min-width: 100%;
 }
@@ -485,13 +490,39 @@ select {
     background: transparent !important;
 }
 
-/* Active note highlight during playback */
+/* Active note highlight during playback:
+   - Standard part: Blue (var(--accent))
+   - Highlighted part ('H'): Bright Fuchsia (#FF0090) */
 .note-highlighted path,
 .note-highlighted ellipse,
 .note-highlighted circle,
 .note-highlighted {
     fill: var(--accent) !important;
     stroke: var(--accent) !important;
+}
+
+.note-highlighted-part path,
+.note-highlighted-part ellipse,
+.note-highlighted-part circle,
+.note-highlighted-part {
+    fill: #FF0090 !important;
+    stroke: #FF0090 !important;
+}
+
+/* Soft transparent yellow marker highlight band rendered BEHIND the staff so notes stay pure black */
+.staff-highlight-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.staff-marker-band {
+    position: absolute;
+    background: var(--highlight-marker);
+    border-radius: 6px;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.22);
 }
 
 /* Loading message inside score box */
@@ -1087,7 +1118,7 @@ kbd {
     flex-direction: column;
     gap: 5px;
     padding: 7px 10px;
-    min-width: 178px;
+    min-width: 196px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -1104,6 +1135,12 @@ kbd {
 .part-control-entry.is-soloed {
     border-color: var(--solo-color);
     box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.22);
+}
+
+.part-control-entry.is-highlighted {
+    border-color: var(--highlight-color);
+    background: #FEFCE8;
+    box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.30);
 }
 
 .part-header-row {
@@ -1247,6 +1284,12 @@ kbd {
     background: var(--solo-color);
     border-color: var(--solo-color);
     color: #FFFFFF;
+}
+
+.part-button.highlight-btn.active {
+    background: #FACC15;
+    border-color: #CA8A04;
+    color: #1E293B;
 }
 
 .mixer-actions {

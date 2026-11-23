@@ -16,6 +16,8 @@
         DEFAULT_BPM: 100,
         DEFAULT_TEMPO_PERCENT: 100,
         DEFAULT_PART_VOLUME: 80,
+        HIGHLIGHT_MAIN_VOLUME: 100,
+        HIGHLIGHT_OTHER_VOLUME: 50,
         MIN_TEMPO_PERCENT: 25,
         MAX_TEMPO_PERCENT: 200,
         MIN_ZOOM: 0.5,
@@ -1351,26 +1353,37 @@
     function clearAllNoteHighlights() {
         for (const el of state.highlightedElements) {
             if (el && el.classList) {
-                el.classList.remove('note-highlighted');
+                el.classList.remove('note-highlighted', 'note-highlighted-part');
             }
         }
         state.highlightedElements.clear();
     }
 
+    function applyNoteHighlightClass(svgEl) {
+        if (!svgEl || !svgEl.classList) return;
+        const partId = svgEl.dataset?.partId;
+        const isPartHighlighted = Boolean(partId && state.parts[partId]?.highlighted);
+        svgEl.classList.remove('note-highlighted', 'note-highlighted-part');
+        svgEl.classList.add(isPartHighlighted ? 'note-highlighted-part' : 'note-highlighted');
+        state.highlightedElements.add(svgEl);
+    }
+
+    function refreshActiveNoteHighlightColors() {
+        for (const svgEl of state.highlightedElements) {
+            applyNoteHighlightClass(svgEl);
+        }
+    }
+
     function highlightStepNotes(stepIdx, specificSvgEl = null) {
         clearAllNoteHighlights();
         if (specificSvgEl && specificSvgEl.classList) {
-            specificSvgEl.classList.add('note-highlighted');
-            state.highlightedElements.add(specificSvgEl);
+            applyNoteHighlightClass(specificSvgEl);
             return;
         }
         const step = state.cursorSteps[stepIdx];
         if (!step || !step.svgNotes) return;
         for (const svgEl of step.svgNotes) {
-            if (svgEl && svgEl.classList) {
-                svgEl.classList.add('note-highlighted');
-                state.highlightedElements.add(svgEl);
-            }
+            applyNoteHighlightClass(svgEl);
         }
     }
 
@@ -1676,6 +1689,7 @@
                         volume: prev ? prev.volume : CONFIG.DEFAULT_PART_VOLUME,
                         muted: prev ? prev.muted : false,
                         soloed: prev ? prev.soloed : false,
+                        highlighted: prev ? Boolean(prev.highlighted) : false,
                         patchId: prev ? prev.patchId : defaultPatch,
                         detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
                         isVocal: prev ? prev.isVocal : detected.isVocal,
@@ -1714,7 +1728,12 @@
                     if (gNotes) {
                         for (const gn of gNotes) {
                             const svgEl = typeof gn.getSVGGElement === 'function' ? gn.getSVGGElement() : null;
-                            if (svgEl) svgNotes.push(svgEl);
+                            if (svgEl) {
+                                const gnInst = gn.sourceNote?.ParentVoiceEntry?.ParentVoice?.Parent;
+                                const gnPartId = gnInst ? (gnInst.IdString || `part_${gnInst.Id ?? 0}`) : 'part_0';
+                                svgEl.dataset.partId = gnPartId;
+                                svgNotes.push(svgEl);
+                            }
                             if (gn && gn.sourceNote) {
                                 gNoteBySource.set(gn.sourceNote, { gn, svgEl });
                             }
@@ -1750,6 +1769,7 @@
                             volume: prev ? prev.volume : CONFIG.DEFAULT_PART_VOLUME,
                             muted: prev ? prev.muted : false,
                             soloed: prev ? prev.soloed : false,
+                            highlighted: prev ? Boolean(prev.highlighted) : false,
                             patchId: prev ? prev.patchId : defaultPatch,
                             detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
                             isVocal: prev ? prev.isVocal : detected.isVocal,
@@ -1895,6 +1915,7 @@
         updateTempoReadoutUI();
         setupTimelineUI();
         renderPartMixerUI();
+        renderStaffHighlights();
 
         // Schedule audio parts if audio already started
         if (state.audioInitialized) {
@@ -2170,14 +2191,8 @@
             }
         }
 
-        // 2. Handle End of Piece cleanly
+        // 2. Handle End of Piece cleanly: stop and reset cursor back to the beginning
         if (rawTicks >= state.totalMusicalTicks) {
-            state.currentTicks = state.totalMusicalTicks;
-            state.smoothTicks = state.totalMusicalTicks;
-            const lastStep = Math.max(0, state.cursorSteps.length - 1);
-            moveCursorToStep(lastStep);
-            updateCameraForTicks(state.totalMusicalTicks, dt, true);
-            updateTimelineReadout(state.totalMusicalTicks);
             stopAtEndOfPiece();
             return;
         }
@@ -2228,10 +2243,16 @@
             cancelAnimationFrame(state.rafId);
             state.rafId = null;
         }
-        Tone.Transport.pause();
+        if (state.audioInitialized) {
+            Tone.Transport.stop();
+        }
         const inner = dom.scoreDisplayArea ? dom.scoreDisplayArea.querySelector('.osmd-score-inner') : null;
         if (inner) inner.style.transform = '';
+        releaseAllInstruments();
         clearAllNoteHighlights();
+
+        // Reset cursor and viewport back to the beginning of the score
+        seekToTicks(0, { snapScroll: true, keepPlaying: false });
         updatePlayPauseButtonUI();
     }
 
@@ -2641,9 +2662,146 @@
         if (!dom.resetMixerBtn) return;
         const partList = Object.values(state.parts);
         const isModified = partList.some(
-            (p) => p.muted || p.soloed || p.volume !== CONFIG.DEFAULT_PART_VOLUME || (p.detectedPatchId && p.patchId !== p.detectedPatchId)
+            (p) => p.muted || p.soloed || p.highlighted || p.volume !== CONFIG.DEFAULT_PART_VOLUME || (p.detectedPatchId && p.patchId !== p.detectedPatchId)
         );
         dom.resetMixerBtn.hidden = !isModified;
+    }
+
+    /**
+     * Renders a bright yellow marker highlight across the staff (or staves) of any highlighted part.
+     * Works seamlessly in both Continuous View and multi-system Page View.
+     */
+    function renderStaffHighlights() {
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        let layer = inner.querySelector('.staff-highlight-layer');
+        const highlightedPartIds = new Set(
+            Object.values(state.parts)
+                .filter((p) => p.highlighted)
+                .map((p) => p.id)
+        );
+
+        if (!state.scoreLoaded || !state.osmd || highlightedPartIds.size === 0) {
+            if (layer) layer.remove();
+            return;
+        }
+
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'staff-highlight-layer';
+            inner.insertBefore(layer, inner.firstChild);
+        } else {
+            layer.innerHTML = '';
+        }
+
+        const osmd = state.osmd;
+        const unitToPx = 10 * state.zoom;
+
+        // Build lookup from OSMD Staff object and staff index to partId
+        const staffToPartId = new Map();
+        const staffIndexToPartId = [];
+        if (osmd.sheet?.Instruments) {
+            osmd.sheet.Instruments.forEach((inst, instIdx) => {
+                const pid = inst.IdString || `part_${inst.Id ?? instIdx}`;
+                if (Array.isArray(inst.Staves) && inst.Staves.length > 0) {
+                    for (const st of inst.Staves) {
+                        staffToPartId.set(st, pid);
+                        staffIndexToPartId.push(pid);
+                    }
+                } else {
+                    staffIndexToPartId.push(pid);
+                }
+            });
+        }
+
+        const frag = document.createDocumentFragment();
+        let bandsAdded = 0;
+
+        const pages = osmd.GraphicSheet?.MusicPages;
+        if (Array.isArray(pages)) {
+            for (const page of pages) {
+                const systems = page?.MusicSystems;
+                if (!Array.isArray(systems)) continue;
+                for (const system of systems) {
+                    const staffLines = system?.StaffLines;
+                    if (!Array.isArray(staffLines)) continue;
+                    for (let sIdx = 0; sIdx < staffLines.length; sIdx++) {
+                        const sl = staffLines[sIdx];
+                        if (!sl || !sl.PositionAndShape) continue;
+
+                        const parentInst = sl.ParentStaff?.ParentInstrument;
+                        const partId = staffToPartId.get(sl.ParentStaff) ||
+                            (parentInst ? (parentInst.IdString || `part_${parentInst.Id ?? 0}`) : null) ||
+                            staffIndexToPartId[sIdx];
+
+                        if (!partId || !highlightedPartIds.has(partId)) continue;
+
+                        const absPos = sl.PositionAndShape.AbsolutePosition;
+                        const size = sl.PositionAndShape.Size;
+                        if (!absPos || !size || !(size.width > 0)) continue;
+
+                        const padTopUnits = 1.35;
+                        const padBottomUnits = 1.35;
+                        const padXUnits = 0.6;
+                        const staffHeightUnits = size.height > 0 ? size.height : 4.0;
+
+                        const leftPx = Math.max(0, (absPos.x - padXUnits) * unitToPx);
+                        const topPx = Math.max(0, (absPos.y - padTopUnits) * unitToPx);
+                        const widthPx = (size.width + padXUnits * 2) * unitToPx;
+                        const heightPx = (staffHeightUnits + padTopUnits + padBottomUnits) * unitToPx;
+
+                        const band = document.createElement('div');
+                        band.className = 'staff-marker-band';
+                        band.style.left = `${leftPx.toFixed(1)}px`;
+                        band.style.top = `${topPx.toFixed(1)}px`;
+                        band.style.width = `${widthPx.toFixed(1)}px`;
+                        band.style.height = `${heightPx.toFixed(1)}px`;
+                        frag.appendChild(band);
+                        bandsAdded++;
+                    }
+                }
+            }
+        }
+
+        // Fallback via MeasureList if MusicSystems.StaffLines was unavailable
+        if (bandsAdded === 0 && Array.isArray(osmd.GraphicSheet?.MeasureList)) {
+            const mList = osmd.GraphicSheet.MeasureList;
+            const rowBounds = new Map();
+            for (let mIdx = 0; mIdx < mList.length; mIdx++) {
+                const col = mList[mIdx];
+                if (!Array.isArray(col)) continue;
+                for (let sIdx = 0; sIdx < col.length; sIdx++) {
+                    const partId = staffIndexToPartId[sIdx];
+                    if (!partId || !highlightedPartIds.has(partId)) continue;
+                    const gm = col[sIdx];
+                    const absPos = gm?.PositionAndShape?.AbsolutePosition;
+                    const size = gm?.PositionAndShape?.Size;
+                    if (!absPos || !size) continue;
+                    const key = `${sIdx}_${Math.round(absPos.y * 2)}`;
+                    const right = absPos.x + size.width;
+                    const existing = rowBounds.get(key);
+                    if (!existing) {
+                        rowBounds.set(key, { minX: absPos.x, maxX: right, y: absPos.y, h: size.height || 4.0 });
+                    } else {
+                        existing.minX = Math.min(existing.minX, absPos.x);
+                        existing.maxX = Math.max(existing.maxX, right);
+                    }
+                }
+            }
+            for (const b of rowBounds.values()) {
+                const band = document.createElement('div');
+                band.className = 'staff-marker-band';
+                band.style.left = `${Math.max(0, (b.minX - 0.6) * unitToPx).toFixed(1)}px`;
+                band.style.top = `${Math.max(0, (b.y - 1.35) * unitToPx).toFixed(1)}px`;
+                band.style.width = `${((b.maxX - b.minX + 1.2) * unitToPx).toFixed(1)}px`;
+                band.style.height = `${((b.h + 2.7) * unitToPx).toFixed(1)}px`;
+                frag.appendChild(band);
+            }
+        }
+
+        layer.appendChild(frag);
     }
 
     function buildPartInstrumentSelect(part) {
@@ -2714,8 +2872,9 @@
             card.className = 'part-control-entry';
             if (part.muted) card.classList.add('is-muted');
             if (part.soloed) card.classList.add('is-soloed');
+            if (part.highlighted) card.classList.add('is-highlighted');
 
-            // Row 1: Part Name + Vocal/Score Tag + Mute / Solo Buttons
+            // Row 1: Part Name + Vocal/Score Tag + Mute / Solo / Highlight Buttons
             const headerRow = document.createElement('div');
             headerRow.className = 'part-header-row';
 
@@ -2763,8 +2922,41 @@
                 applyAllPartGains(false);
             });
 
+            const highlightBtn = document.createElement('button');
+            highlightBtn.className = `part-button highlight-btn${part.highlighted ? ' active' : ''}`;
+            highlightBtn.textContent = 'H';
+            highlightBtn.title = `Highlight ${part.name} (Yellow staff marker, 100% volume, other parts 50%)`;
+            highlightBtn.setAttribute('aria-pressed', String(Boolean(part.highlighted)));
+            highlightBtn.addEventListener('click', () => {
+                const willHighlight = !part.highlighted;
+                for (const p of Object.values(state.parts)) {
+                    if (willHighlight) {
+                        if (p.id === part.id) {
+                            p.highlighted = true;
+                            p.muted = false;
+                            p.volume = CONFIG.HIGHLIGHT_MAIN_VOLUME;
+                        } else {
+                            p.highlighted = false;
+                            p.soloed = false;
+                            p.volume = CONFIG.HIGHLIGHT_OTHER_VOLUME;
+                        }
+                    } else {
+                        p.highlighted = false;
+                        p.volume = CONFIG.DEFAULT_PART_VOLUME;
+                    }
+                }
+                renderPartMixerUI();
+                renderStaffHighlights();
+                refreshActiveNoteHighlightColors();
+                applyAllPartGains(false);
+                if (willHighlight) {
+                    toast(`Highlighted ${part.name} (100% volume, other parts 50%)`);
+                }
+            });
+
             btnGroup.appendChild(muteBtn);
             btnGroup.appendChild(soloBtn);
+            btnGroup.appendChild(highlightBtn);
             headerRow.appendChild(titleWrap);
             headerRow.appendChild(btnGroup);
             card.appendChild(headerRow);
@@ -3671,9 +3863,12 @@
                     part.volume = CONFIG.DEFAULT_PART_VOLUME;
                     part.muted = false;
                     part.soloed = false;
+                    part.highlighted = false;
                     part.patchId = part.detectedPatchId || 'piano';
                 }
                 renderPartMixerUI();
+                renderStaffHighlights();
+                refreshActiveNoteHighlightColors();
                 if (state.audioInitialized && Object.keys(state.parts).length > 0) {
                     await loadAndBuildAllPartInstruments();
                 } else {
