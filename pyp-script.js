@@ -11,7 +11,8 @@
 
     const CONFIG = {
         OSMD_DRAWING_PARAMETERS: 'compacttight',
-        AUDIO_SAMPLES_BASE_URL: 'https://tonejs.github.io/audio/salamander/',
+        SALAMANDER_BASE_URL: 'https://tonejs.github.io/audio/salamander/',
+        VSCO_BASE_URL: 'https://nbrosowsky.github.io/tonejs-instruments/samples/',
         DEFAULT_BPM: 100,
         DEFAULT_TEMPO_PERCENT: 100,
         MIN_TEMPO_PERCENT: 25,
@@ -28,7 +29,16 @@
         BAROQUE_PITCH_HZ: 415,
     };
 
-    const PIANO_SAMPLE_FILES = {
+    // Helper to build full URL map for an instrument folder
+    function buildUrlMap(baseUrl, noteToFile) {
+        const result = {};
+        for (const [note, file] of Object.entries(noteToFile)) {
+            result[note] = file.startsWith('http') ? file : `${baseUrl}${file}`;
+        }
+        return result;
+    }
+
+    const SALAMANDER_PIANO_URLS = buildUrlMap(CONFIG.SALAMANDER_BASE_URL, {
         'A0': 'A0.mp3', 'C1': 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3',
         'A1': 'A1.mp3', 'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3',
         'A2': 'A2.mp3', 'C3': 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3',
@@ -37,6 +47,455 @@
         'A5': 'A5.mp3', 'C6': 'C6.mp3', 'D#6': 'Ds6.mp3', 'F#6': 'Fs6.mp3',
         'A6': 'A6.mp3', 'C7': 'C7.mp3', 'D#7': 'Ds7.mp3', 'F#7': 'Fs7.mp3',
         'A7': 'A7.mp3', 'C8': 'C8.mp3',
+    });
+
+    const VSCO_URLS = {
+        violin: buildUrlMap(`${CONFIG.VSCO_BASE_URL}violin/`, {
+            'A3': 'A3.mp3', 'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3',
+            'A4': 'A4.mp3', 'C5': 'C5.mp3', 'E5': 'E5.mp3', 'G5': 'G5.mp3',
+            'A5': 'A5.mp3', 'C6': 'C6.mp3', 'E6': 'E6.mp3', 'G6': 'G6.mp3',
+            'A6': 'A6.mp3', 'C7': 'C7.mp3',
+        }),
+        cello: buildUrlMap(`${CONFIG.VSCO_BASE_URL}cello/`, {
+            'C2': 'C2.mp3', 'E2': 'E2.mp3', 'G2': 'G2.mp3', 'A2': 'A2.mp3',
+            'C3': 'C3.mp3', 'E3': 'E3.mp3', 'G3': 'G3.mp3', 'A3': 'A3.mp3',
+            'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3', 'A4': 'A4.mp3',
+            'C5': 'C5.mp3',
+        }),
+        contrabass: buildUrlMap(`${CONFIG.VSCO_BASE_URL}contrabass/`, {
+            'F#1': 'Fs1.mp3', 'G1': 'G1.mp3', 'A#1': 'As1.mp3', 'C2': 'C2.mp3',
+            'D2': 'D2.mp3', 'E2': 'E2.mp3', 'F#2': 'Fs2.mp3', 'G#2': 'Gs2.mp3',
+            'A2': 'A2.mp3', 'C#3': 'Cs3.mp3', 'E3': 'E3.mp3', 'G#3': 'Gs3.mp3',
+            'B3': 'B3.mp3',
+        }),
+        flute: buildUrlMap(`${CONFIG.VSCO_BASE_URL}flute/`, {
+            'C4': 'C4.mp3', 'E4': 'E4.mp3', 'A4': 'A4.mp3',
+            'C5': 'C5.mp3', 'E5': 'E5.mp3', 'A5': 'A5.mp3',
+            'C6': 'C6.mp3', 'E6': 'E6.mp3', 'A6': 'A6.mp3', 'C7': 'C7.mp3',
+        }),
+        clarinet: buildUrlMap(`${CONFIG.VSCO_BASE_URL}clarinet/`, {
+            'D3': 'D3.mp3', 'F3': 'F3.mp3', 'A#3': 'As3.mp3',
+            'D4': 'D4.mp3', 'F4': 'F4.mp3', 'A#4': 'As4.mp3',
+            'D5': 'D5.mp3', 'F5': 'F5.mp3', 'A#5': 'As5.mp3',
+            'D6': 'D6.mp3', 'F#6': 'Fs6.mp3',
+        }),
+        bassoon: buildUrlMap(`${CONFIG.VSCO_BASE_URL}bassoon/`, {
+            'G2': 'G2.mp3', 'A2': 'A2.mp3', 'C3': 'C3.mp3', 'G3': 'G3.mp3',
+            'A3': 'A3.mp3', 'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3',
+            'A4': 'A4.mp3', 'C5': 'C5.mp3',
+        }),
+        frenchHorn: buildUrlMap(`${CONFIG.VSCO_BASE_URL}french-horn/`, {
+            'A1': 'A1.mp3', 'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'G2': 'G2.mp3',
+            'D3': 'D3.mp3', 'F3': 'F3.mp3', 'A3': 'A3.mp3', 'C4': 'C4.mp3',
+            'D5': 'D5.mp3', 'F5': 'F5.mp3',
+        }),
+        trumpet: buildUrlMap(`${CONFIG.VSCO_BASE_URL}trumpet/`, {
+            'F3': 'F3.mp3', 'A3': 'A3.mp3', 'C4': 'C4.mp3', 'D#4': 'Ds4.mp3',
+            'F4': 'F4.mp3', 'G4': 'G4.mp3', 'A#4': 'As4.mp3', 'D5': 'D5.mp3',
+            'F5': 'F5.mp3', 'A5': 'A5.mp3', 'C6': 'C6.mp3',
+        }),
+        trombone: buildUrlMap(`${CONFIG.VSCO_BASE_URL}trombone/`, {
+            'A#1': 'As1.mp3', 'C#2': 'Cs2.mp3', 'D#2': 'Ds2.mp3', 'F2': 'F2.mp3',
+            'G#2': 'Gs2.mp3', 'A#2': 'As2.mp3', 'C3': 'C3.mp3', 'D#3': 'Ds3.mp3',
+            'F3': 'F3.mp3', 'G#3': 'Gs3.mp3', 'A#3': 'As3.mp3', 'C4': 'C4.mp3',
+            'D4': 'D4.mp3', 'F4': 'F4.mp3',
+        }),
+        tuba: buildUrlMap(`${CONFIG.VSCO_BASE_URL}tuba/`, {
+            'F1': 'F1.mp3', 'A#1': 'As1.mp3', 'D#2': 'Ds2.mp3', 'F2': 'F2.mp3',
+            'A#2': 'As2.mp3', 'D3': 'D3.mp3', 'F3': 'F3.mp3', 'A#3': 'As3.mp3',
+            'D4': 'D4.mp3',
+        }),
+        harp: buildUrlMap(`${CONFIG.VSCO_BASE_URL}harp/`, {
+            'E1': 'E1.mp3', 'G1': 'G1.mp3', 'B1': 'B1.mp3', 'D2': 'D2.mp3',
+            'F2': 'F2.mp3', 'A2': 'A2.mp3', 'C3': 'C3.mp3', 'E3': 'E3.mp3',
+            'G3': 'G3.mp3', 'B3': 'B3.mp3', 'D4': 'D4.mp3', 'F4': 'F4.mp3',
+            'A4': 'A4.mp3', 'C5': 'C5.mp3', 'E5': 'E5.mp3', 'G5': 'G5.mp3',
+            'B5': 'B5.mp3', 'D6': 'D6.mp3', 'F6': 'F6.mp3', 'A6': 'A6.mp3',
+            'B6': 'B6.mp3', 'D7': 'D7.mp3',
+        }),
+        organ: buildUrlMap(`${CONFIG.VSCO_BASE_URL}organ/`, {
+            'C1': 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3', 'A1': 'A1.mp3',
+            'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3', 'A2': 'A2.mp3',
+            'C3': 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3', 'A3': 'A3.mp3',
+            'C4': 'C4.mp3', 'D#4': 'Ds4.mp3', 'F#4': 'Fs4.mp3', 'A4': 'A4.mp3',
+            'C5': 'C5.mp3', 'D#5': 'Ds5.mp3', 'F#5': 'Fs5.mp3', 'A5': 'A5.mp3',
+            'C6': 'C6.mp3',
+        }),
+        harmonium: buildUrlMap(`${CONFIG.VSCO_BASE_URL}harmonium/`, {
+            'C2': 'C2.mp3', 'E2': 'E2.mp3', 'G2': 'G2.mp3', 'A2': 'A2.mp3',
+            'C3': 'C3.mp3', 'E3': 'E3.mp3', 'G3': 'G3.mp3', 'A3': 'A3.mp3',
+            'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3', 'A4': 'A4.mp3',
+            'C5': 'C5.mp3', 'D5': 'D5.mp3',
+        }),
+        guitarNylon: buildUrlMap(`${CONFIG.VSCO_BASE_URL}guitar-nylon/`, {
+            'B1': 'B1.mp3', 'D2': 'D2.mp3', 'E2': 'E2.mp3', 'F#2': 'Fs2.mp3',
+            'G#2': 'Gs2.mp3', 'A2': 'A2.mp3', 'B2': 'B2.mp3', 'D3': 'D3.mp3',
+            'E3': 'E3.mp3', 'G3': 'G3.mp3', 'A3': 'A3.mp3', 'B3': 'B3.mp3',
+            'C#4': 'Cs4.mp3', 'E4': 'E4.mp3', 'G#4': 'Gs4.mp3', 'A4': 'A4.mp3',
+            'B4': 'B4.mp3', 'D5': 'D5.mp3', 'E5': 'E5.mp3', 'A5': 'A5.mp3',
+        }),
+        saxophone: buildUrlMap(`${CONFIG.VSCO_BASE_URL}saxophone/`, {
+            'D3': 'D3.mp3', 'F3': 'F3.mp3', 'G#3': 'Gs3.mp3', 'B3': 'B3.mp3',
+            'D4': 'D4.mp3', 'F4': 'F4.mp3', 'G#4': 'Gs4.mp3', 'B4': 'B4.mp3',
+            'D5': 'D5.mp3', 'F5': 'F5.mp3', 'G#5': 'Gs5.mp3', 'A5': 'A5.mp3',
+        }),
+        xylophone: buildUrlMap(`${CONFIG.VSCO_BASE_URL}xylophone/`, {
+            'G4': 'G4.mp3', 'C5': 'C5.mp3', 'G5': 'G5.mp3', 'C6': 'C6.mp3',
+            'G6': 'G6.mp3', 'C7': 'C7.mp3', 'G7': 'G7.mp3', 'C8': 'C8.mp3',
+        }),
+    };
+
+    // Composite acoustic multi-sample maps for Viola, Oboe, English Horn, String Ensemble, and Piccolo
+    const COMPOSITE_URLS = {
+        viola: {
+            'C3': `${CONFIG.VSCO_BASE_URL}cello/C3.mp3`,
+            'D3': `${CONFIG.VSCO_BASE_URL}cello/D3.mp3`,
+            'E3': `${CONFIG.VSCO_BASE_URL}cello/E3.mp3`,
+            'F3': `${CONFIG.VSCO_BASE_URL}cello/F3.mp3`,
+            'G3': `${CONFIG.VSCO_BASE_URL}cello/G3.mp3`,
+            'A3': `${CONFIG.VSCO_BASE_URL}cello/A3.mp3`,
+            'B3': `${CONFIG.VSCO_BASE_URL}cello/B3.mp3`,
+            'C4': `${CONFIG.VSCO_BASE_URL}violin/C4.mp3`,
+            'E4': `${CONFIG.VSCO_BASE_URL}violin/E4.mp3`,
+            'G4': `${CONFIG.VSCO_BASE_URL}violin/G4.mp3`,
+            'A4': `${CONFIG.VSCO_BASE_URL}violin/A4.mp3`,
+            'C5': `${CONFIG.VSCO_BASE_URL}violin/C5.mp3`,
+            'E5': `${CONFIG.VSCO_BASE_URL}violin/E5.mp3`,
+            'G5': `${CONFIG.VSCO_BASE_URL}violin/G5.mp3`,
+            'A5': `${CONFIG.VSCO_BASE_URL}violin/A5.mp3`,
+            'C6': `${CONFIG.VSCO_BASE_URL}violin/C6.mp3`,
+        },
+        strings: {
+            'G1': `${CONFIG.VSCO_BASE_URL}contrabass/G1.mp3`,
+            'C2': `${CONFIG.VSCO_BASE_URL}cello/C2.mp3`,
+            'E2': `${CONFIG.VSCO_BASE_URL}cello/E2.mp3`,
+            'G2': `${CONFIG.VSCO_BASE_URL}cello/G2.mp3`,
+            'A2': `${CONFIG.VSCO_BASE_URL}cello/A2.mp3`,
+            'C3': `${CONFIG.VSCO_BASE_URL}cello/C3.mp3`,
+            'E3': `${CONFIG.VSCO_BASE_URL}cello/E3.mp3`,
+            'G3': `${CONFIG.VSCO_BASE_URL}cello/G3.mp3`,
+            'A3': `${CONFIG.VSCO_BASE_URL}violin/A3.mp3`,
+            'C4': `${CONFIG.VSCO_BASE_URL}violin/C4.mp3`,
+            'E4': `${CONFIG.VSCO_BASE_URL}violin/E4.mp3`,
+            'G4': `${CONFIG.VSCO_BASE_URL}violin/G4.mp3`,
+            'A4': `${CONFIG.VSCO_BASE_URL}violin/A4.mp3`,
+            'C5': `${CONFIG.VSCO_BASE_URL}violin/C5.mp3`,
+            'E5': `${CONFIG.VSCO_BASE_URL}violin/E5.mp3`,
+            'G5': `${CONFIG.VSCO_BASE_URL}violin/G5.mp3`,
+            'A5': `${CONFIG.VSCO_BASE_URL}violin/A5.mp3`,
+            'C6': `${CONFIG.VSCO_BASE_URL}violin/C6.mp3`,
+            'E6': `${CONFIG.VSCO_BASE_URL}violin/E6.mp3`,
+            'A6': `${CONFIG.VSCO_BASE_URL}violin/A6.mp3`,
+            'C7': `${CONFIG.VSCO_BASE_URL}violin/C7.mp3`,
+        },
+        oboe: {
+            'A3': `${CONFIG.VSCO_BASE_URL}bassoon/A3.mp3`,
+            'C4': `${CONFIG.VSCO_BASE_URL}bassoon/C4.mp3`,
+            'E4': `${CONFIG.VSCO_BASE_URL}bassoon/E4.mp3`,
+            'G4': `${CONFIG.VSCO_BASE_URL}bassoon/G4.mp3`,
+            'A4': `${CONFIG.VSCO_BASE_URL}bassoon/A4.mp3`,
+            'C5': `${CONFIG.VSCO_BASE_URL}bassoon/C5.mp3`,
+            'D5': `${CONFIG.VSCO_BASE_URL}clarinet/D5.mp3`,
+            'F5': `${CONFIG.VSCO_BASE_URL}clarinet/F5.mp3`,
+            'A#5': `${CONFIG.VSCO_BASE_URL}clarinet/As5.mp3`,
+            'D6': `${CONFIG.VSCO_BASE_URL}clarinet/D6.mp3`,
+            'F#6': `${CONFIG.VSCO_BASE_URL}clarinet/Fs6.mp3`,
+        },
+        englishHorn: {
+            'G3': `${CONFIG.VSCO_BASE_URL}bassoon/G3.mp3`,
+            'A3': `${CONFIG.VSCO_BASE_URL}bassoon/A3.mp3`,
+            'C4': `${CONFIG.VSCO_BASE_URL}bassoon/C4.mp3`,
+            'E4': `${CONFIG.VSCO_BASE_URL}bassoon/E4.mp3`,
+            'G4': `${CONFIG.VSCO_BASE_URL}bassoon/G4.mp3`,
+            'A4': `${CONFIG.VSCO_BASE_URL}bassoon/A4.mp3`,
+            'C5': `${CONFIG.VSCO_BASE_URL}bassoon/C5.mp3`,
+            'D5': `${CONFIG.VSCO_BASE_URL}clarinet/D5.mp3`,
+            'F5': `${CONFIG.VSCO_BASE_URL}clarinet/F5.mp3`,
+        },
+    };
+
+    /**
+     * Classical Instrument Catalog
+     * Ordered and grouped by musical family for the per-part Mixer selector.
+     */
+    const INSTRUMENT_CATALOG = {
+        // --- Keyboard & Vocal Rehearsal ---
+        'piano': {
+            id: 'piano',
+            label: 'Grand Piano',
+            category: 'Keyboard & Vocal',
+            urls: SALAMANDER_PIANO_URLS,
+            release: 0.85,
+            attack: 0.005,
+            volumeDb: -1,
+            durationFactor: 0.95,
+            synthFamily: 'piano',
+        },
+        'organ': {
+            id: 'organ',
+            label: 'Pipe Organ',
+            category: 'Keyboard & Vocal',
+            urls: VSCO_URLS.organ,
+            release: 0.25,
+            attack: 0.02,
+            volumeDb: -5,
+            durationFactor: 0.99,
+            synthFamily: 'organ',
+        },
+        'harpsichord': {
+            id: 'harpsichord',
+            label: 'Harpsichord (Cembalo)',
+            category: 'Keyboard & Vocal',
+            urls: VSCO_URLS.harp,
+            release: 0.35,
+            attack: 0.003,
+            volumeDb: -3,
+            durationFactor: 0.92,
+            filter: { type: 'highpass', frequency: 240, Q: 0.9 },
+            synthFamily: 'plucked',
+        },
+        'harmonium': {
+            id: 'harmonium',
+            label: 'Harmonium / Reed Organ',
+            category: 'Keyboard & Vocal',
+            urls: VSCO_URLS.harmonium,
+            release: 0.25,
+            attack: 0.025,
+            volumeDb: -5,
+            durationFactor: 0.98,
+            synthFamily: 'organ',
+        },
+
+        // --- Strings ---
+        'violin': {
+            id: 'violin',
+            label: 'Violin',
+            category: 'Strings',
+            urls: VSCO_URLS.violin,
+            release: 0.38,
+            attack: 0.025,
+            volumeDb: -4,
+            durationFactor: 0.98,
+            synthFamily: 'strings',
+        },
+        'viola': {
+            id: 'viola',
+            label: 'Viola',
+            category: 'Strings',
+            urls: COMPOSITE_URLS.viola,
+            release: 0.38,
+            attack: 0.025,
+            volumeDb: -3,
+            durationFactor: 0.98,
+            filter: { type: 'lowpass', frequency: 3300, Q: 0.7 },
+            synthFamily: 'strings',
+        },
+        'cello': {
+            id: 'cello',
+            label: 'Violoncello (Cello)',
+            category: 'Strings',
+            urls: VSCO_URLS.cello,
+            release: 0.42,
+            attack: 0.025,
+            volumeDb: -3,
+            durationFactor: 0.98,
+            synthFamily: 'strings',
+        },
+        'contrabass': {
+            id: 'contrabass',
+            label: 'Contrabass (Double Bass)',
+            category: 'Strings',
+            urls: VSCO_URLS.contrabass,
+            release: 0.45,
+            attack: 0.03,
+            volumeDb: -2,
+            durationFactor: 0.98,
+            synthFamily: 'strings',
+        },
+        'strings': {
+            id: 'strings',
+            label: 'String Ensemble',
+            category: 'Strings',
+            urls: COMPOSITE_URLS.strings,
+            release: 0.48,
+            attack: 0.035,
+            volumeDb: -4,
+            durationFactor: 0.99,
+            synthFamily: 'strings',
+        },
+        'harp': {
+            id: 'harp',
+            label: 'Concert Harp',
+            category: 'Strings',
+            urls: VSCO_URLS.harp,
+            release: 1.1,
+            attack: 0.005,
+            volumeDb: -2,
+            durationFactor: 1.0,
+            synthFamily: 'plucked',
+        },
+        'guitar-nylon': {
+            id: 'guitar-nylon',
+            label: 'Classical Guitar',
+            category: 'Strings',
+            urls: VSCO_URLS.guitarNylon,
+            release: 0.75,
+            attack: 0.005,
+            volumeDb: -3,
+            durationFactor: 0.96,
+            synthFamily: 'plucked',
+        },
+
+        // --- Woodwinds ---
+        'flute': {
+            id: 'flute',
+            label: 'Flute',
+            category: 'Woodwinds',
+            urls: VSCO_URLS.flute,
+            release: 0.28,
+            attack: 0.02,
+            volumeDb: -3,
+            durationFactor: 0.96,
+            synthFamily: 'woodwind',
+        },
+        'piccolo': {
+            id: 'piccolo',
+            label: 'Piccolo',
+            category: 'Woodwinds',
+            urls: VSCO_URLS.flute,
+            release: 0.22,
+            attack: 0.015,
+            volumeDb: -4,
+            durationFactor: 0.95,
+            synthFamily: 'woodwind',
+        },
+        'oboe': {
+            id: 'oboe',
+            label: 'Oboe',
+            category: 'Woodwinds',
+            urls: COMPOSITE_URLS.oboe,
+            release: 0.25,
+            attack: 0.018,
+            volumeDb: -3,
+            durationFactor: 0.97,
+            filter: { type: 'peaking', frequency: 1450, Q: 1.8, gain: 7 },
+            synthFamily: 'reed',
+        },
+        'english-horn': {
+            id: 'english-horn',
+            label: 'English Horn (Cor Anglais)',
+            category: 'Woodwinds',
+            urls: COMPOSITE_URLS.englishHorn,
+            release: 0.28,
+            attack: 0.02,
+            volumeDb: -3,
+            durationFactor: 0.97,
+            filter: { type: 'peaking', frequency: 1050, Q: 1.6, gain: 6 },
+            synthFamily: 'reed',
+        },
+        'clarinet': {
+            id: 'clarinet',
+            label: 'Clarinet',
+            category: 'Woodwinds',
+            urls: VSCO_URLS.clarinet,
+            release: 0.26,
+            attack: 0.018,
+            volumeDb: -3,
+            durationFactor: 0.97,
+            synthFamily: 'woodwind',
+        },
+        'bassoon': {
+            id: 'bassoon',
+            label: 'Bassoon (Fagotto)',
+            category: 'Woodwinds',
+            urls: VSCO_URLS.bassoon,
+            release: 0.3,
+            attack: 0.02,
+            volumeDb: -2,
+            durationFactor: 0.97,
+            synthFamily: 'reed',
+        },
+        'saxophone': {
+            id: 'saxophone',
+            label: 'Saxophone',
+            category: 'Woodwinds',
+            urls: VSCO_URLS.saxophone,
+            release: 0.28,
+            attack: 0.018,
+            volumeDb: -4,
+            durationFactor: 0.96,
+            synthFamily: 'reed',
+        },
+
+        // --- Brass ---
+        'french-horn': {
+            id: 'french-horn',
+            label: 'French Horn (Corno)',
+            category: 'Brass',
+            urls: VSCO_URLS.frenchHorn,
+            release: 0.32,
+            attack: 0.022,
+            volumeDb: -3,
+            durationFactor: 0.97,
+            synthFamily: 'brass',
+        },
+        'trumpet': {
+            id: 'trumpet',
+            label: 'Trumpet (Tromba)',
+            category: 'Brass',
+            urls: VSCO_URLS.trumpet,
+            release: 0.26,
+            attack: 0.015,
+            volumeDb: -5,
+            durationFactor: 0.96,
+            synthFamily: 'brass',
+        },
+        'trombone': {
+            id: 'trombone',
+            label: 'Trombone (Posaune)',
+            category: 'Brass',
+            urls: VSCO_URLS.trombone,
+            release: 0.3,
+            attack: 0.02,
+            volumeDb: -4,
+            durationFactor: 0.97,
+            synthFamily: 'brass',
+        },
+        'tuba': {
+            id: 'tuba',
+            label: 'Tuba',
+            category: 'Brass',
+            urls: VSCO_URLS.tuba,
+            release: 0.34,
+            attack: 0.025,
+            volumeDb: -3,
+            durationFactor: 0.97,
+            synthFamily: 'brass',
+        },
+
+        // --- Percussion & Mallets ---
+        'timpani': {
+            id: 'timpani',
+            label: 'Timpani (Pauken)',
+            category: 'Percussion',
+            urls: null, // Uses tuned orchestral kettle-drum synth
+            release: 0.8,
+            attack: 0.004,
+            volumeDb: -2,
+            durationFactor: 0.9,
+            synthFamily: 'timpani',
+        },
+        'xylophone': {
+            id: 'xylophone',
+            label: 'Xylophone / Mallets',
+            category: 'Percussion',
+            urls: VSCO_URLS.xylophone,
+            release: 0.5,
+            attack: 0.003,
+            volumeDb: -4,
+            durationFactor: 0.92,
+            synthFamily: 'plucked',
+        },
     };
 
     // ===========================================
@@ -47,6 +506,7 @@
         loadScoreButton: document.getElementById('loadScoreButton'),
         welcomeOpenBtn: document.getElementById('welcomeOpenBtn'),
         loadDemoScoreBtn: document.getElementById('loadDemoScoreBtn'),
+        loadDemoEnsembleBtn: document.getElementById('loadDemoEnsembleBtn'),
         fileInput: document.getElementById('fileInput'),
         scoreDisplayArea: document.getElementById('scoreDisplayArea'),
         scoreTitleChip: document.getElementById('scoreTitleChip'),
@@ -104,9 +564,6 @@
         resetMixerBtn: document.getElementById('resetMixerBtn'),
     };
 
-    // Preserve original welcome markup so resetting never loses it
-    const welcomeMarkup = dom.scoreDisplayArea ? dom.scoreDisplayArea.innerHTML : '';
-
     // ===========================================
     // APPLICATION STATE
     // ===========================================
@@ -118,6 +575,7 @@
         scoreTitle: '',
         continuousScrollMode: true,
         zoom: 1.0,
+        rawXmlPartMeta: {}, // { [partId]: { partName, partAbbrev, instrumentName, instrumentSound, midiProgram } }
 
         // Musical timeline (in Tone.Transport ticks: 1 whole note = 4 * PPQ)
         ticksPerWhole: 768,
@@ -128,9 +586,9 @@
         tempoPercent: CONFIG.DEFAULT_TEMPO_PERCENT,
 
         // Extracted score structures
-        notes: [],         // { ticks, durationWhole, midi, partId, velocity, stepIdx }
-        cursorSteps: [],   // { stepIdx, ticks, realValue, measureIndex, x, y, height, svgNotes }
-        barData: [],       // { barNumber, measureIndex, startTicks, endTicks, beats, beatValue, bpm }
+        notes: [],          // { ticks, durationWhole, midi, partId, velocity, stepIdx }
+        cursorSteps: [],    // { stepIdx, ticks, realValue, measureIndex, x, y, height, svgNotes }
+        barData: [],        // { barNumber, measureIndex, startTicks, endTicks, numerator, denominator, bpm }
         metronomeBeats: [], // { ticks, isDownbeat }
         currentStepIndex: 0,
 
@@ -149,11 +607,12 @@
         loopEndBar: 4,
         metronomeEnabled: false,
 
-        // Audio Engine
+        // Audio Engine & Multi-Instrument Sample Cache
         audioInitialized: false,
-        pianoBuffers: null,
-        pianoBuffersFailed: false,
-        soundPatch: 'piano',
+        instrumentBuffers: {},      // { [patchId]: Tone.ToneAudioBuffers }
+        instrumentLoadPromises: {}, // { [patchId]: Promise<Tone.ToneAudioBuffers | null> }
+        instrumentFailed: {},       // { [patchId]: boolean }
+        soundPreset: 'auto',        // 'auto' = from score (Singers -> Piano), or global patchId override
         concertPitchHz: CONFIG.DEFAULT_PITCH_HZ,
         masterVolume: 80,
         masterMuted: false,
@@ -164,12 +623,278 @@
         playbackPart: null,
         metronomePart: null,
 
-        // Per-part mixer: { [partId]: { id, name, volume, muted, soloed, gainNode, instrument } }
+        // Per-part mixer:
+        // { [partId]: { id, name, volume, muted, soloed, patchId, detectedPatchId, isVocal, roleTag, isLoadingPatch, gainNode, filterNode, instrument } }
         parts: {},
 
         // Active SVG highlights so we can clear cleanly on pause/seek/stop
         highlightedElements: new Set(),
     };
+
+    // ===========================================
+    // SCORE INSTRUMENT & VOCAL AUTO-DETECTION
+    // ===========================================
+
+    /**
+     * Parses <score-part> metadata from uncompressed MusicXML string if available.
+     */
+    function parseRawXmlPartMetadata(xmlContent) {
+        const metaMap = {};
+        if (typeof xmlContent !== 'string' || !xmlContent.trim().startsWith('<')) {
+            return metaMap;
+        }
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xmlContent, 'application/xml');
+            const scoreParts = doc.querySelectorAll('score-part');
+            scoreParts.forEach((sp) => {
+                const id = sp.getAttribute('id');
+                if (!id) return;
+                const partName = sp.querySelector('part-name')?.textContent?.trim() || '';
+                const partAbbrev = sp.querySelector('part-abbreviation')?.textContent?.trim() || '';
+                const instrumentName = sp.querySelector('score-instrument > instrument-name')?.textContent?.trim() || '';
+                const instrumentSound = sp.querySelector('score-instrument > instrument-sound')?.textContent?.trim()?.toLowerCase() || '';
+                const midiProgText = sp.querySelector('midi-instrument > midi-program')?.textContent?.trim();
+                const midiProgram = midiProgText ? parseInt(midiProgText, 10) : null;
+
+                metaMap[id] = {
+                    partName,
+                    partAbbrev,
+                    instrumentName,
+                    instrumentSound,
+                    midiProgram,
+                };
+            });
+        } catch (e) {
+            console.warn('[PYP] Could not parse raw XML score-part headers:', e);
+        }
+        return metaMap;
+    }
+
+    /**
+     * Determines the best classical instrument patch for a score part.
+     * RULE: Any Singer / Vocal / SATB / Choir part is ALWAYS mapped to 'piano' (Grand Piano).
+     * All classical orchestral/chamber instruments map to their corresponding acoustic samples.
+     */
+    function detectPartInstrument(partInfo, allPartInfos = []) {
+        const rawText = [
+            partInfo.name || '',
+            partInfo.xmlMeta?.partName || '',
+            partInfo.xmlMeta?.instrumentName || '',
+            partInfo.subInstrumentName || '',
+        ].join(' ').toLowerCase().trim();
+
+        const abbrev = (partInfo.xmlMeta?.partAbbrev || partInfo.name || '').toLowerCase().trim();
+        const soundId = (partInfo.xmlMeta?.instrumentSound || '').toLowerCase().trim();
+        const hasLyrics = Boolean(partInfo.hasLyrics);
+
+        // Normalize MIDI program to 1-indexed General MIDI (1..128)
+        let gmProg1 = null;
+        if (typeof partInfo.xmlMeta?.midiProgram === 'number' && !Number.isNaN(partInfo.xmlMeta.midiProgram)) {
+            gmProg1 = partInfo.xmlMeta.midiProgram;
+        } else if (typeof partInfo.midiInstrumentId === 'number' && !Number.isNaN(partInfo.midiInstrumentId)) {
+            // OSMD stores 0-indexed MidiInstrumentId (or 1-indexed in some cases)
+            gmProg1 = partInfo.midiInstrumentId <= 127 ? partInfo.midiInstrumentId + 1 : partInfo.midiInstrumentId;
+        }
+
+        // Check if any sibling part is explicitly vocal (helps disambiguate "Alto" and "Bass" in SATB scores)
+        const scoreHasExplicitVocalSibling = allPartInfos.some((p) => {
+            const t = `${p.name || ''} ${p.xmlMeta?.partName || ''} ${p.xmlMeta?.instrumentSound || ''}`.toLowerCase();
+            return /\b(sopran|soprano|sopraan|mezzo|contralto|countertenor|tenor|tenore|bariton|baritone|choir|chorus|koor|coro|chor|voce|vocal|voice|singstimme|zang|canto|cantus)\b/.test(t) ||
+                Boolean(p.hasLyrics);
+        });
+
+        // Helper: check if text contains an explicit non-vocal instrument noun
+        // (so "Soprano Saxophone", "Tenor Trombone", "Alto Flute", "Bass Clarinet", "Double Bass", "Basso Continuo" are not treated as singers)
+        const hasInstrumentalNoun = /\b(sax|saxophone|saxofoon|trombone|posaune|flute|flauto|flöte|fluit|recorder|blockflöte|blokfluit|oboe|hobo|hautbois|clarinet|clarinetto|klarinette|klarinet|bassoon|fagotto|fagott|fagot|horn|corno|hoorn|trumpet|tromba|trompete|trompet|tuba|violin|violino|violine|viool|viola|bratsche|altviool|cello|violoncello|contrabass|kontrabass|contrebasse|contrabas|double\s*bass|string\s*bass|violone|continuo|cembalo|harpsichord|klavecimbel|clavecin|organ|organo|orgel|orgue|harmonium|piano|pianoforte|klavier|harp|arpa|harfe|guitar|chitarra|gitarre|gitaar|timpani|pauken|xylophone|marimba|glockenspiel|drum|percussion)\b/.test(rawText);
+
+        // --------------------------------------------------
+        // 1. SINGERS / VOCAL PARTS -> GRAND PIANO ('piano')
+        // --------------------------------------------------
+        if (soundId.startsWith('voice.') || soundId.includes('vocal') || soundId.includes('choir')) {
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+        }
+
+        // Explicit vocal keywords (when not modifying an instrument like "Tenor Saxophone" or "Bass Clarinet")
+        const hasExplicitVocalWord = /\b(soprano|sopraan|sopran|mezzo[-\s]*soprano|mezzo|contralto|countertenor|contratenor|tenor|tenore|baritone|bariton|baritono|baryton|voice|voices|vocal|voce|voci|stimme|singstimme|zang|canto|cantus|altus|bassus|quintus|sextus|choir|chorus|koor|chor|coro|chœur|choeur|soli|soloist|singer|satb|ssa|ssaa|ttbb|sab)\b/.test(rawText);
+
+        if (hasExplicitVocalWord && !hasInstrumentalNoun) {
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+        }
+
+        // Shorthand vocal part names: "S", "A", "T", "B", "S1", "S2", "A1", "A2", "T1", "T2", "B1", "B2", "S.", "A.", "T.", "B."
+        if (/^(s|a|t|b|sop|alt|ten|bas|sopr)\.?(\s*[1234i]+)?$/i.test(partInfo.name.trim()) && !hasInstrumentalNoun) {
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+        }
+
+        // "Alto" / "Alt" or "Bass" / "Bas" / "Basso" without an instrumental noun
+        const isBareAltoOrBass = /\b(alto|alt|bass|bas|basso)\b/.test(rawText) && !hasInstrumentalNoun;
+        if (isBareAltoOrBass) {
+            // In French orchestral scores without vocals, "Alto" can be Viola (GM 42) and "Basso" can be Contrabass (GM 44)
+            const isGmViola = gmProg1 === 42 && !hasLyrics && !scoreHasExplicitVocalSibling;
+            const isGmContrabass = (gmProg1 === 43 || gmProg1 === 44) && !hasLyrics && !scoreHasExplicitVocalSibling;
+            if (!isGmViola && !isGmContrabass) {
+                return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+            }
+        }
+
+        // Any part with vocal lyrics (unless explicitly labeled Piano/Organ/Harpsichord/Guitar)
+        if (hasLyrics && !hasInstrumentalNoun) {
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+        }
+
+        // --------------------------------------------------
+        // 2. MUSICXML <instrument-sound> STANDARD TAXONOMY
+        // --------------------------------------------------
+        if (soundId) {
+            if (soundId.includes('piccolo')) return { patchId: 'piccolo', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('flute') || soundId.includes('recorder')) return { patchId: 'flute', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('english-horn') || soundId.includes('cor-anglais')) return { patchId: 'english-horn', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('oboe')) return { patchId: 'oboe', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('clarinet')) return { patchId: 'clarinet', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('bassoon') || soundId.includes('contrabassoon')) return { patchId: 'bassoon', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('saxophone')) return { patchId: 'saxophone', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('horn')) return { patchId: 'french-horn', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('trumpet') || soundId.includes('cornet') || soundId.includes('flugelhorn')) return { patchId: 'trumpet', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('trombone')) return { patchId: 'trombone', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('tuba') || soundId.includes('euphonium')) return { patchId: 'tuba', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('violin')) return { patchId: 'violin', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('viola')) return { patchId: 'viola', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('cello') || soundId.includes('violoncello')) return { patchId: 'cello', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('contrabass') || soundId.includes('double-bass')) return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('harp')) return { patchId: 'harp', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('guitar') || soundId.includes('lute') || soundId.includes('pluck')) return { patchId: 'guitar-nylon', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('harpsichord') || soundId.includes('clavichord')) return { patchId: 'harpsichord', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('harmonium') || soundId.includes('accordion')) return { patchId: 'harmonium', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('organ')) return { patchId: 'organ', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('piano') || soundId.includes('keyboard')) return { patchId: 'piano', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('timpani')) return { patchId: 'timpani', isVocal: false, roleTag: 'Score' };
+            if (soundId.includes('xylophone') || soundId.includes('marimba') || soundId.includes('glockenspiel') || soundId.includes('vibraphone')) {
+                return { patchId: 'xylophone', isVocal: false, roleTag: 'Score' };
+            }
+            if (soundId.startsWith('strings.')) return { patchId: 'strings', isVocal: false, roleTag: 'Score' };
+        }
+
+        // --------------------------------------------------
+        // 3. CLASSICAL PART NAME MATCHING (EN / IT / DE / FR / NL)
+        // --------------------------------------------------
+        // Woodwinds
+        if (/\b(piccolo|ottavino|kleine\s*flöte|picc\.?)\b/.test(rawText)) return { patchId: 'piccolo', isVocal: false, roleTag: 'Score' };
+        if (/\b(flute|flutes|flauto|flauti|flöte|flöten|flûte|fluit|dwarsfluit|recorder|blockflöte|blokfluit|traverso)\b/.test(rawText) || /^fl\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'flute', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(english\s*horn|cor\s*anglais|englischhorn|corno\s*inglese|althobo)\b/.test(rawText)) {
+            return { patchId: 'english-horn', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(oboe|oboes|oboi|hautbois|hobo)\b/.test(rawText) || /^ob\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'oboe', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(clarinet|clarinets|clarinetto|clarinetti|klarinette|klarinetten|clarinette|klarinet|basset\s*horn)\b/.test(rawText) || /^cl\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'clarinet', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(bassoon|bassoons|fagotto|fagotti|fagott|fagotte|fagot|basson|contrabassoon|contrafagotto|kontrafagott)\b/.test(rawText) || /^(bsn|fg)\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'bassoon', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(saxophone|saxofoon|saxophon|sax)\b/.test(rawText)) {
+            return { patchId: 'saxophone', isVocal: false, roleTag: 'Score' };
+        }
+
+        // Brass
+        if (/\b(french\s*horn|horn|horns|corno|corni|waldhorn|hoorn|hoorns|cor\s+in|cor\s+en)\b/.test(rawText) || /^(hn|cor)\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'french-horn', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(trumpet|trumpets|tromba|trombe|trompete|trompeten|trompette|trompet|cornet|clarino|flugelhorn)\b/.test(rawText) || /^(tpt|tr|trp)\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'trumpet', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(trombone|trombones|posaune|posaunen|sackbut)\b/.test(rawText) || /^(trb|tbn|pos)\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'trombone', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(tuba|euphonium|bombardino|ophicleide|sousaphone)\b/.test(rawText)) {
+            return { patchId: 'tuba', isVocal: false, roleTag: 'Score' };
+        }
+
+        // Strings (Check Contrabass before Cello/Bass; Viola before Violin)
+        if (/\b(contrabass|kontrabass|contrebasse|contrabas|double\s*bass|string\s*bass|violone)\b/.test(rawText) || /^(cb|db|kb)\.?$/i.test(abbrev)) {
+            return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(violoncello|violoncelli|violoncelle|violoncel|cello|celli)\b/.test(rawText) || /^(vc|vlc)\.?$/i.test(abbrev)) {
+            return { patchId: 'cello', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(viola|viole|bratsche|altviool|viola\s+da\s+gamba)\b/.test(rawText) || /^(vla|va)\.?$/i.test(abbrev)) {
+            return { patchId: 'viola', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(violin|violins|violino|violini|violine|violinen|violon|violons|viool|fiddle)\b/.test(rawText) || /^(vln|vl)\.?\s*[1234i]*$/i.test(abbrev)) {
+            return { patchId: 'violin', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(harp|arpa|harfe|harpe)\b/.test(rawText)) {
+            return { patchId: 'harp', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(guitar|chitarra|gitarre|guitare|gitaar|lute|liuto|laute|theorbo|mandolin)\b/.test(rawText)) {
+            return { patchId: 'guitar-nylon', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(strings|string\s*orchestra|archi|streicher|cordes|strijkers)\b/.test(rawText)) {
+            return { patchId: 'strings', isVocal: false, roleTag: 'Score' };
+        }
+
+        // Keyboards & Continuo
+        if (/\b(harpsichord|cembalo|clavicembalo|clavecin|klavecimbel|virginal|spinet|continuo|basso\s*continuo)\b/.test(rawText) || /^(cemb|b\.?c\.?)$/i.test(abbrev)) {
+            return { patchId: 'harpsichord', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(harmonium|reed\s*organ|accordion|akkordeon|bandoneon)\b/.test(rawText)) {
+            return { patchId: 'harmonium', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(organ|organo|orgel|orgue|pipe\s*organ|positif)\b/.test(rawText) || /^org\.?$/i.test(abbrev)) {
+            return { patchId: 'organ', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(piano|pianoforte|klavier|fortepiano)\b/.test(rawText) || /^(pno|pf)\.?$/i.test(abbrev)) {
+            return { patchId: 'piano', isVocal: false, roleTag: 'Score' };
+        }
+
+        // Percussion & Mallets
+        if (/\b(timpani|pauken|timbales)\b/.test(rawText) || /^timp\.?$/i.test(abbrev)) {
+            return { patchId: 'timpani', isVocal: false, roleTag: 'Score' };
+        }
+        if (/\b(xylophone|marimba|glockenspiel|vibraphone|celesta|campanelli|chimes|tubular\s*bells)\b/.test(rawText)) {
+            return { patchId: 'xylophone', isVocal: false, roleTag: 'Score' };
+        }
+
+        // --------------------------------------------------
+        // 4. GENERAL MIDI PROGRAM FALLBACK (1..128)
+        // --------------------------------------------------
+        if (gmProg1 !== null && gmProg1 >= 1 && gmProg1 <= 128) {
+            if (gmProg1 >= 53 && gmProg1 <= 55) return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+            if (gmProg1 >= 1 && gmProg1 <= 6) return { patchId: 'piano', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 7 && gmProg1 <= 8) return { patchId: 'harpsichord', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 9 && gmProg1 <= 16) return { patchId: 'xylophone', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 17 && gmProg1 <= 21) return { patchId: 'organ', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 22 && gmProg1 <= 24) return { patchId: 'harmonium', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 25 && gmProg1 <= 32) return { patchId: 'guitar-nylon', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 33 && gmProg1 <= 40) return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 41) return { patchId: 'violin', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 42) return { patchId: 'viola', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 43) return { patchId: 'cello', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 44) return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 47) return { patchId: 'harp', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 48) return { patchId: 'timpani', isVocal: false, roleTag: 'Score' };
+            if ((gmProg1 >= 45 && gmProg1 <= 46) || (gmProg1 >= 49 && gmProg1 <= 52)) {
+                return { patchId: 'strings', isVocal: false, roleTag: 'Score' };
+            }
+            if (gmProg1 === 57 || gmProg1 === 60) return { patchId: 'trumpet', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 58) return { patchId: 'trombone', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 59) return { patchId: 'tuba', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 61 && gmProg1 <= 64) return { patchId: 'french-horn', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 65 && gmProg1 <= 68) return { patchId: 'saxophone', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 69) return { patchId: 'oboe', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 70) return { patchId: 'english-horn', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 71) return { patchId: 'bassoon', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 72) return { patchId: 'clarinet', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 === 73) return { patchId: 'piccolo', isVocal: false, roleTag: 'Score' };
+            if (gmProg1 >= 74 && gmProg1 <= 80) return { patchId: 'flute', isVocal: false, roleTag: 'Score' };
+        }
+
+        // Default to Grand Piano
+        return { patchId: 'piano', isVocal: false, roleTag: 'Piano' };
+    }
 
     // ===========================================
     // UTILITY HELPERS
@@ -248,23 +973,16 @@
 
     /**
      * Extract accurate concert-pitch MIDI number from an OSMD Note.
-     * In OSMD: Pitch.getHalfTone() uses C4 = 48 (octave 1 -> (1+3)*12 = 48),
-     * while Note.halfTone returns the sounding MIDI number (C4 = 60) or Pitch + transpose + 12.
      */
     function extractMidiNote(note) {
         if (!note || note.isRest() || !note.Pitch) return null;
 
-        // OSMD Note.halfTone already accounts for instrument transposition & octave shift (C4 = 60 in OSMD >= 1.x)
-        // Cross-check against Pitch.halfTone to protect against OSMD version differences.
         const pitchHalfTone = typeof note.Pitch.getHalfTone === 'function'
             ? note.Pitch.getHalfTone()
             : note.Pitch.halfTone;
 
         let midi;
         if (typeof note.halfTone === 'number' && !Number.isNaN(note.halfTone)) {
-            // In OSMD, note.halfTone is typically pitchHalfTone + 12 (+ instrument transpose).
-            // Verify: if note.halfTone differs from pitchHalfTone by roughly +12 (modulo transpose), use it directly.
-            // If an older build returns C4 = 48 for note.halfTone, note.halfTone === pitchHalfTone when untransposed.
             const transpose = note.ParentVoiceEntry?.ParentVoice?.Parent?.MidiInstrumentId !== undefined
                 ? (note.ParentVoiceEntry?.ParentVoice?.Parent?.SubInstruments?.[0]?.Transpose || 0)
                 : 0;
@@ -281,12 +999,11 @@
             return null;
         }
 
-        // Clamp to playable MIDI range [21 (A0) .. 108 (C8)]
         return Math.max(21, Math.min(108, Math.round(midi)));
     }
 
     // ===========================================
-    // AUDIO ENGINE (TONE.JS v15)
+    // AUDIO ENGINE & MULTI-SAMPLE LOADER
     // ===========================================
 
     function ensureMasterAudioChain() {
@@ -301,96 +1018,140 @@
         }).connect(state.metronomeGain);
     }
 
-    async function loadPianoBuffersOnce() {
-        if (state.pianoBuffers || state.pianoBuffersFailed) return;
+    /**
+     * Loads and caches the ToneAudioBuffers for a classical instrument patch on demand.
+     * Multiple parts sharing the same patch reuse the single cached buffer set.
+     */
+    async function loadInstrumentBuffersOnce(patchId) {
+        const def = INSTRUMENT_CATALOG[patchId] || INSTRUMENT_CATALOG.piano;
+        if (!def.urls) return null; // Synth-only instrument (e.g. timpani)
+        if (state.instrumentBuffers[patchId]) return state.instrumentBuffers[patchId];
+        if (state.instrumentFailed[patchId]) return null;
+        if (state.instrumentLoadPromises[patchId]) return state.instrumentLoadPromises[patchId];
 
-        try {
-            state.pianoBuffers = await new Promise((resolve, reject) => {
-                let settled = false;
-                const timeoutId = window.setTimeout(() => {
+        const promise = new Promise((resolve) => {
+            let settled = false;
+            const timeoutId = window.setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    console.warn(`[PYP] Sample load timed out for ${patchId}; using synth fallback.`);
+                    state.instrumentFailed[patchId] = true;
+                    resolve(null);
+                }
+            }, 14000);
+
+            const buffers = new Tone.ToneAudioBuffers({
+                urls: def.urls,
+                baseUrl: '',
+                onload: () => {
                     if (!settled) {
                         settled = true;
-                        reject(new Error('Piano sample loading timed out'));
+                        window.clearTimeout(timeoutId);
+                        state.instrumentBuffers[patchId] = buffers;
+                        resolve(buffers);
                     }
-                }, 12000);
-
-                const buffers = new Tone.ToneAudioBuffers({
-                    urls: PIANO_SAMPLE_FILES,
-                    baseUrl: CONFIG.AUDIO_SAMPLES_BASE_URL,
-                    onload: () => {
-                        if (!settled) {
-                            settled = true;
-                            window.clearTimeout(timeoutId);
-                            resolve(buffers);
-                        }
-                    },
-                    onerror: (err) => {
-                        if (!settled) {
-                            settled = true;
-                            window.clearTimeout(timeoutId);
-                            reject(err);
-                        }
-                    },
-                });
+                },
+                onerror: (err) => {
+                    if (!settled) {
+                        settled = true;
+                        window.clearTimeout(timeoutId);
+                        console.warn(`[PYP] Failed to load samples for ${patchId}; using synth fallback.`, err);
+                        state.instrumentFailed[patchId] = true;
+                        resolve(null);
+                    }
+                },
             });
-        } catch (err) {
-            console.warn('[PYP] Piano sample CDN unavailable; falling back to built-in synth.', err);
-            state.pianoBuffersFailed = true;
-            toast('Using built-in piano synth (offline fallback)', 'info');
+        });
+
+        state.instrumentLoadPromises[patchId] = promise;
+        const result = await promise;
+        delete state.instrumentLoadPromises[patchId];
+        return result;
+    }
+
+    function createFallbackSynth(synthFamily, destinationNode) {
+        switch (synthFamily) {
+            case 'timpani':
+                return new Tone.PolySynth(Tone.MembraneSynth, {
+                    maxPolyphony: 8,
+                    pitchDecay: 0.015,
+                    octaves: 1.4,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.004, decay: 0.65, sustain: 0.05, release: 0.5 },
+                    volume: -4,
+                }).connect(destinationNode);
+            case 'strings':
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 16,
+                    oscillator: { type: 'fatsawtooth', count: 3, spread: 16 },
+                    envelope: { attack: 0.055, decay: 0.15, sustain: 0.82, release: 0.38 },
+                    volume: -10,
+                }).connect(destinationNode);
+            case 'woodwind':
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 12,
+                    oscillator: { type: 'triangle2' },
+                    envelope: { attack: 0.03, decay: 0.1, sustain: 0.85, release: 0.25 },
+                    volume: -7,
+                }).connect(destinationNode);
+            case 'reed':
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 12,
+                    oscillator: { type: 'pulse', width: 0.35 },
+                    envelope: { attack: 0.025, decay: 0.12, sustain: 0.8, release: 0.24 },
+                    volume: -11,
+                }).connect(destinationNode);
+            case 'brass':
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 12,
+                    oscillator: { type: 'sawtooth4' },
+                    envelope: { attack: 0.03, decay: 0.14, sustain: 0.82, release: 0.28 },
+                    volume: -9,
+                }).connect(destinationNode);
+            case 'organ':
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 16,
+                    oscillator: { type: 'sine2' },
+                    envelope: { attack: 0.035, decay: 0.1, sustain: 0.88, release: 0.22 },
+                    volume: -8,
+                }).connect(destinationNode);
+            case 'plucked':
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 16,
+                    oscillator: { type: 'sawtooth6' },
+                    envelope: { attack: 0.004, decay: 0.38, sustain: 0.08, release: 0.25 },
+                    volume: -9,
+                }).connect(destinationNode);
+            case 'piano':
+            default:
+                return new Tone.PolySynth(Tone.Synth, {
+                    maxPolyphony: 16,
+                    oscillator: { type: 'triangle4' },
+                    envelope: { attack: 0.008, decay: 0.45, sustain: 0.25, release: 0.45 },
+                    volume: -6,
+                }).connect(destinationNode);
         }
     }
 
-    function createInstrumentForPatch(patch, destinationNode) {
-        if (patch === 'piano' && state.pianoBuffers && !state.pianoBuffersFailed) {
-            const bufferMap = {};
-            for (const noteName of Object.keys(PIANO_SAMPLE_FILES)) {
-                if (state.pianoBuffers.has(noteName)) {
-                    bufferMap[noteName] = state.pianoBuffers.get(noteName);
-                }
-            }
-            return new Tone.Sampler({
-                urls: bufferMap,
-                release: 0.7,
-                volume: -2,
-            }).connect(destinationNode);
+    function disposeSinglePartInstrument(part) {
+        if (part.instrument) {
+            try {
+                part.instrument.releaseAll?.();
+                part.instrument.dispose();
+            } catch (_) { /* ignore */ }
+            part.instrument = null;
         }
-
-        if (patch === 'organ') {
-            return new Tone.PolySynth(Tone.Synth, {
-                maxPolyphony: 16,
-                oscillator: { type: 'sine2' },
-                envelope: { attack: 0.04, decay: 0.1, sustain: 0.82, release: 0.25 },
-                volume: -8,
-            }).connect(destinationNode);
+        if (part.filterNode) {
+            try {
+                part.filterNode.dispose();
+            } catch (_) { /* ignore */ }
+            part.filterNode = null;
         }
-
-        if (patch === 'harpsichord') {
-            return new Tone.PolySynth(Tone.Synth, {
-                maxPolyphony: 16,
-                oscillator: { type: 'sawtooth6' },
-                envelope: { attack: 0.004, decay: 0.35, sustain: 0.08, release: 0.12 },
-                volume: -10,
-            }).connect(destinationNode);
-        }
-
-        // Fallback soft piano synth (when offline or samples failed)
-        return new Tone.PolySynth(Tone.Synth, {
-            maxPolyphony: 16,
-            oscillator: { type: 'triangle4' },
-            envelope: { attack: 0.008, decay: 0.45, sustain: 0.25, release: 0.45 },
-            volume: -6,
-        }).connect(destinationNode);
     }
 
     function disposePartAudioNodes() {
         for (const part of Object.values(state.parts)) {
-            if (part.instrument) {
-                try {
-                    part.instrument.releaseAll?.();
-                    part.instrument.dispose();
-                } catch (_) { /* ignore */ }
-                part.instrument = null;
-            }
+            disposeSinglePartInstrument(part);
             if (part.gainNode) {
                 try {
                     part.gainNode.dispose();
@@ -400,23 +1161,88 @@
         }
     }
 
-    function buildPartAudioNodes() {
+    function createInstrumentNodeForPart(part) {
         if (!state.audioInitialized) return;
         ensureMasterAudioChain();
 
+        if (!part.gainNode) {
+            part.gainNode = new Tone.Gain(1).connect(state.masterGain);
+        }
+
+        disposeSinglePartInstrument(part);
+
+        const patchId = part.patchId || 'piano';
+        const def = INSTRUMENT_CATALOG[patchId] || INSTRUMENT_CATALOG.piano;
+        const cachedBuffers = state.instrumentBuffers[patchId];
+
+        let targetDest = part.gainNode;
+        if (def.filter) {
+            part.filterNode = new Tone.Filter({
+                type: def.filter.type || 'lowpass',
+                frequency: def.filter.frequency || 2000,
+                Q: def.filter.Q ?? 1,
+                gain: def.filter.gain ?? 0,
+            }).connect(part.gainNode);
+            targetDest = part.filterNode;
+        }
+
+        if (def.urls && cachedBuffers && !state.instrumentFailed[patchId]) {
+            const bufferMap = {};
+            for (const noteName of Object.keys(def.urls)) {
+                if (cachedBuffers.has(noteName)) {
+                    bufferMap[noteName] = cachedBuffers.get(noteName);
+                }
+            }
+            part.instrument = new Tone.Sampler({
+                urls: bufferMap,
+                attack: def.attack ?? 0.01,
+                release: def.release ?? 0.5,
+                volume: def.volumeDb ?? -2,
+            }).connect(targetDest);
+        } else {
+            part.instrument = createFallbackSynth(def.synthFamily, targetDest);
+        }
+    }
+
+    async function loadAndBuildAllPartInstruments() {
+        if (!state.audioInitialized) return;
+        ensureMasterAudioChain();
+
+        const uniquePatches = [...new Set(Object.values(state.parts).map((p) => p.patchId || 'piano'))];
+        await Promise.all(uniquePatches.map((pid) => loadInstrumentBuffersOnce(pid)));
+
         for (const part of Object.values(state.parts)) {
-            if (!part.gainNode) {
-                part.gainNode = new Tone.Gain(1).connect(state.masterGain);
-            }
-            if (part.instrument) {
-                try {
-                    part.instrument.releaseAll?.();
-                    part.instrument.dispose();
-                } catch (_) { /* ignore */ }
-            }
-            part.instrument = createInstrumentForPatch(state.soundPatch, part.gainNode);
+            createInstrumentNodeForPart(part);
         }
         applyAllPartGains(true);
+    }
+
+    /**
+     * Hot-swaps a single part's instrument (called when user changes a part's dropdown in the Mixer).
+     */
+    async function setPartInstrument(partId, newPatchId, announce = true) {
+        const part = state.parts[partId];
+        if (!part || !INSTRUMENT_CATALOG[newPatchId]) return;
+
+        part.patchId = newPatchId;
+        const def = INSTRUMENT_CATALOG[newPatchId];
+
+        if (state.audioInitialized) {
+            const needsDownload = Boolean(def.urls && !state.instrumentBuffers[newPatchId] && !state.instrumentFailed[newPatchId]);
+            if (needsDownload) {
+                part.isLoadingPatch = true;
+                renderPartMixerUI();
+                await loadInstrumentBuffersOnce(newPatchId);
+                part.isLoadingPatch = false;
+            }
+            createInstrumentNodeForPart(part);
+            applyAllPartGains(false);
+        }
+
+        renderPartMixerUI();
+        if (announce) {
+            toast(`${part.name}: ${def.label}`);
+        }
     }
 
     function releaseAllInstruments() {
@@ -481,14 +1307,16 @@
                 state.audioInitialized = true;
             }
 
-            if (state.soundPatch === 'piano' && !state.pianoBuffers && !state.pianoBuffersFailed) {
-                await loadPianoBuffersOnce();
-            }
+            // Ensure all currently selected part instruments have their buffers loaded & nodes built
+            const partsList = Object.values(state.parts);
+            const anyMissingBuffer = partsList.some((p) => {
+                const def = INSTRUMENT_CATALOG[p.patchId || 'piano'];
+                return def?.urls && !state.instrumentBuffers[p.patchId] && !state.instrumentFailed[p.patchId];
+            });
+            const anyMissingNode = partsList.some((p) => !p.instrument || !p.gainNode);
 
-            // Ensure every loaded part has gain + instrument
-            const needsBuild = Object.values(state.parts).some((p) => !p.instrument || !p.gainNode);
-            if (needsBuild) {
-                buildPartAudioNodes();
+            if (anyMissingBuffer || anyMissingNode) {
+                await loadAndBuildAllPartInstruments();
             }
 
             applyMasterVolume();
@@ -569,13 +1397,16 @@
             const part = state.parts[ev.partId];
             if (!part || !part.instrument) return;
 
+            const def = INSTRUMENT_CATALOG[part.patchId] || INSTRUMENT_CATALOG.piano;
+
             // Live concert pitch frequency (supports real-time 440Hz / 415Hz switching!)
             const freqHz = state.concertPitchHz * Math.pow(2, (ev.midi - 69) / 12);
 
-            // Live tempo-scaled duration
+            // Live tempo-scaled duration with instrument-specific legato/articulation factor
             const liveBpm = Math.max(10, Tone.Transport.bpm.value || getEffectiveBpm());
             const secPerWhole = (60 / liveBpm) * 4;
-            const durationSec = Math.max(0.05, ev.durationWhole * secPerWhole * 0.94);
+            const durFactor = def.durationFactor ?? 0.95;
+            const durationSec = Math.max(0.05, ev.durationWhole * secPerWhole * durFactor);
 
             try {
                 part.instrument.triggerAttackRelease(freqHz, durationSec, audioTime, ev.velocity);
@@ -734,18 +1565,62 @@
 
         // Pre-register instruments from sheet so part order matches score order top-to-bottom
         if (osmd.sheet.Instruments) {
-            osmd.sheet.Instruments.forEach((inst, idx) => {
+            const rawPartInfos = osmd.sheet.Instruments.map((inst, idx) => {
                 const partId = inst.IdString || `part_${inst.Id ?? idx}`;
-                const partName = (inst.Name || inst.NameLabel?.text || `Part ${idx + 1}`).trim();
+                const xmlMeta = state.rawXmlPartMeta[partId] || null;
+                const partName = (inst.Name || inst.NameLabel?.text || xmlMeta?.partName || `Part ${idx + 1}`).trim();
+                const subInst = inst.SubInstruments && inst.SubInstruments[0];
+
+                // Check if any voice in this instrument contains vocal lyrics
+                let hasLyrics = false;
+                try {
+                    if (Array.isArray(inst.Voices)) {
+                        for (const v of inst.Voices) {
+                            if (Array.isArray(v.VoiceEntries)) {
+                                for (const ve of v.VoiceEntries) {
+                                    if (ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)) {
+                                        hasLyrics = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hasLyrics) break;
+                        }
+                    }
+                } catch (_) { /* ignore */ }
+
+                return {
+                    partId,
+                    name: partName,
+                    xmlMeta,
+                    subInstrumentName: subInst?.name || '',
+                    midiInstrumentId: inst.MidiInstrumentId ?? subInst?.midiInstrumentID,
+                    hasLyrics,
+                };
+            });
+
+            rawPartInfos.forEach((pInfo) => {
+                const { partId, name: partName } = pInfo;
                 if (!nextParts[partId]) {
                     const prev = prevParts[partId];
+                    const detected = detectPartInstrument(pInfo, rawPartInfos);
+                    const defaultPatch = (state.soundPreset !== 'auto' && INSTRUMENT_CATALOG[state.soundPreset])
+                        ? state.soundPreset
+                        : detected.patchId;
+
                     nextParts[partId] = {
                         id: partId,
                         name: partName,
                         volume: prev ? prev.volume : 100,
                         muted: prev ? prev.muted : false,
                         soloed: prev ? prev.soloed : false,
+                        patchId: prev ? prev.patchId : defaultPatch,
+                        detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
+                        isVocal: prev ? prev.isVocal : detected.isVocal,
+                        roleTag: prev ? prev.roleTag : detected.roleTag,
+                        isLoadingPatch: false,
                         gainNode: prev ? prev.gainNode : null,
+                        filterNode: prev ? prev.filterNode : null,
                         instrument: prev ? prev.instrument : null,
                     };
                 }
@@ -801,13 +1676,31 @@
 
                     if (!nextParts[partId]) {
                         const prev = prevParts[partId];
+                        const detected = detectPartInstrument({
+                            partId,
+                            name: partName,
+                            xmlMeta: state.rawXmlPartMeta[partId] || null,
+                            subInstrumentName: inst?.SubInstruments?.[0]?.name || '',
+                            midiInstrumentId: inst?.MidiInstrumentId,
+                            hasLyrics: Boolean(ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)),
+                        });
+                        const defaultPatch = (state.soundPreset !== 'auto' && INSTRUMENT_CATALOG[state.soundPreset])
+                            ? state.soundPreset
+                            : detected.patchId;
+
                         nextParts[partId] = {
                             id: partId,
                             name: partName,
                             volume: prev ? prev.volume : 100,
                             muted: prev ? prev.muted : false,
                             soloed: prev ? prev.soloed : false,
+                            patchId: prev ? prev.patchId : defaultPatch,
+                            detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
+                            isVocal: prev ? prev.isVocal : detected.isVocal,
+                            roleTag: prev ? prev.roleTag : detected.roleTag,
+                            isLoadingPatch: false,
                             gainNode: prev ? prev.gainNode : null,
+                            filterNode: prev ? prev.filterNode : null,
                             instrument: prev ? prev.instrument : null,
                         };
                     }
@@ -886,7 +1779,7 @@
         // Schedule audio parts if audio already started
         if (state.audioInitialized) {
             if (!preserveMixerSettings) {
-                buildPartAudioNodes();
+                loadAndBuildAllPartInstruments();
             }
             scheduleToneParts();
         }
@@ -1313,7 +2206,7 @@
             if (playIcon) playIcon.hidden = true;
             if (pauseIcon) pauseIcon.hidden = true;
             if (spinner) spinner.hidden = false;
-            btn.title = 'Loading piano samples…';
+            btn.title = 'Loading instrument samples…';
             btn.setAttribute('aria-label', 'Loading audio');
         } else if (state.isPlaying) {
             if (playIcon) playIcon.hidden = true;
@@ -1489,8 +2382,54 @@
     function updateResetMixerVisibility() {
         if (!dom.resetMixerBtn) return;
         const partList = Object.values(state.parts);
-        const isModified = partList.some((p) => p.muted || p.soloed || p.volume !== 100);
+        const isModified = partList.some(
+            (p) => p.muted || p.soloed || p.volume !== 100 || (p.detectedPatchId && p.patchId !== p.detectedPatchId)
+        );
         dom.resetMixerBtn.hidden = !isModified;
+    }
+
+    function buildPartInstrumentSelect(part) {
+        const select = document.createElement('select');
+        select.className = 'part-instrument-select';
+        select.title = `Select playback instrument for ${part.name} (Score default: ${INSTRUMENT_CATALOG[part.detectedPatchId]?.label || 'Grand Piano'})`;
+        select.setAttribute('aria-label', `${part.name} Instrument`);
+
+        // Group catalog entries by category
+        const groups = {};
+        for (const def of Object.values(INSTRUMENT_CATALOG)) {
+            if (!groups[def.category]) groups[def.category] = [];
+            groups[def.category].push(def);
+        }
+
+        for (const [category, items] of Object.entries(groups)) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category;
+
+            for (const def of items) {
+                const opt = document.createElement('option');
+                opt.value = def.id;
+                const isScoreDefault = def.id === part.detectedPatchId;
+                const defaultSuffix = isScoreDefault
+                    ? (part.isVocal ? ' ★ (Vocal)' : ' ★ (Score)')
+                    : '';
+                opt.textContent = `${def.label}${defaultSuffix}`;
+                optgroup.appendChild(opt);
+            }
+            select.appendChild(optgroup);
+        }
+
+        select.value = part.patchId || 'piano';
+
+        select.addEventListener('change', () => {
+            const chosenPatch = select.value;
+            if (dom.soundSelect && dom.soundSelect.value !== 'auto') {
+                state.soundPreset = 'auto';
+                dom.soundSelect.value = 'auto';
+            }
+            setPartInstrument(part.id, chosenPatch, true);
+        });
+
+        return select;
     }
 
     function renderPartMixerUI() {
@@ -1505,7 +2444,7 @@
         }
 
         if (!partList.length) {
-            wrapper.innerHTML = '<span class="mixer-empty-hint">Load a score to mix individual parts (Volume, Mute &amp; Solo).</span>';
+            wrapper.innerHTML = '<span class="mixer-empty-hint">Load a score to mix individual parts &amp; select classical instruments.</span>';
             updateResetMixerVisibility();
             return;
         }
@@ -1518,33 +2457,26 @@
             if (part.muted) card.classList.add('is-muted');
             if (part.soloed) card.classList.add('is-soloed');
 
+            // Row 1: Part Name + Vocal/Score Tag + Mute / Solo Buttons
+            const headerRow = document.createElement('div');
+            headerRow.className = 'part-header-row';
+
+            const titleWrap = document.createElement('div');
+            titleWrap.className = 'part-title-wrap';
+
             const label = document.createElement('span');
             label.className = 'part-label';
             label.textContent = part.name;
             label.title = part.name;
-            card.appendChild(label);
+            titleWrap.appendChild(label);
 
-            const slider = document.createElement('input');
-            slider.type = 'range';
-            slider.className = 'part-volume-slider';
-            slider.min = '0';
-            slider.max = '100';
-            slider.value = String(part.volume);
-            slider.title = `${part.name} Volume`;
-            slider.setAttribute('aria-label', `${part.name} Volume`);
-
-            const volReadout = document.createElement('span');
-            volReadout.className = 'part-vol-value';
-            volReadout.textContent = `${part.volume}%`;
-
-            slider.addEventListener('input', () => {
-                part.volume = parseInt(slider.value, 10);
-                volReadout.textContent = `${part.volume}%`;
-                applyAllPartGains(false);
-            });
-
-            card.appendChild(slider);
-            card.appendChild(volReadout);
+            if (part.isVocal) {
+                const roleTag = document.createElement('span');
+                roleTag.className = 'part-role-tag';
+                roleTag.textContent = 'Vocal';
+                roleTag.title = 'Singing voice automatically assigned to Grand Piano';
+                titleWrap.appendChild(roleTag);
+            }
 
             const btnGroup = document.createElement('div');
             btnGroup.className = 'part-btn-group';
@@ -1575,7 +2507,49 @@
 
             btnGroup.appendChild(muteBtn);
             btnGroup.appendChild(soloBtn);
-            card.appendChild(btnGroup);
+            headerRow.appendChild(titleWrap);
+            headerRow.appendChild(btnGroup);
+            card.appendChild(headerRow);
+
+            // Row 2: Per-Part Classical Instrument Selector
+            const instRow = document.createElement('div');
+            instRow.className = 'part-instrument-row';
+            instRow.appendChild(buildPartInstrumentSelect(part));
+
+            if (part.isLoadingPatch) {
+                const dot = document.createElement('span');
+                dot.className = 'part-loading-dot';
+                dot.title = 'Loading instrument samples…';
+                instRow.appendChild(dot);
+            }
+            card.appendChild(instRow);
+
+            // Row 3: Part Volume Slider + Percentage Readout
+            const volRow = document.createElement('div');
+            volRow.className = 'part-volume-row';
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'part-volume-slider';
+            slider.min = '0';
+            slider.max = '100';
+            slider.value = String(part.volume);
+            slider.title = `${part.name} Volume`;
+            slider.setAttribute('aria-label', `${part.name} Volume`);
+
+            const volReadout = document.createElement('span');
+            volReadout.className = 'part-vol-value';
+            volReadout.textContent = `${part.volume}%`;
+
+            slider.addEventListener('input', () => {
+                part.volume = parseInt(slider.value, 10);
+                volReadout.textContent = `${part.volume}%`;
+                applyAllPartGains(false);
+            });
+
+            volRow.appendChild(slider);
+            volRow.appendChild(volReadout);
+            card.appendChild(volRow);
 
             frag.appendChild(card);
         }
@@ -1603,6 +2577,7 @@
 
         state.scoreLoaded = false;
         state.scoreTitle = fallbackTitle;
+        state.rawXmlPartMeta = parseRawXmlPartMetadata(content);
         state.currentTicks = 0;
         state.currentStepIndex = 0;
         state.notes = [];
@@ -1662,7 +2637,10 @@
 
             const numParts = Object.keys(state.parts).length;
             const numBars = state.barData.length;
-            toast(`Loaded "${state.scoreTitle}" (${numParts} ${numParts === 1 ? 'part' : 'parts'}, ${numBars} bars)`, 'success');
+            const summaryInstruments = [...new Set(
+                Object.values(state.parts).map((p) => INSTRUMENT_CATALOG[p.patchId]?.label || 'Piano')
+            )].slice(0, 3).join(', ');
+            toast(`Loaded "${state.scoreTitle}" (${numParts} parts, ${numBars} bars — ${summaryInstruments})`, 'success', 3400);
         } catch (err) {
             console.error('[PYP] Error loading score:', err);
             state.osmd = null;
@@ -1824,15 +2802,112 @@
   <work><work-title>Chorale in C Major (Demo)</work-title></work>
   <identification><creator type="composer">PYP Practice Suite</creator></identification>
   <part-list>
-    <score-part id="P1"><part-name>Soprano</part-name></score-part>
-    <score-part id="P2"><part-name>Alto</part-name></score-part>
-    <score-part id="P3"><part-name>Tenor</part-name></score-part>
-    <score-part id="P4"><part-name>Bass</part-name></score-part>
+    <score-part id="P1"><part-name>Soprano</part-name><score-instrument id="P1-I1"><instrument-name>Soprano</instrument-name><instrument-sound>voice.soprano</instrument-sound></score-instrument></score-part>
+    <score-part id="P2"><part-name>Alto</part-name><score-instrument id="P2-I1"><instrument-name>Alto</instrument-name><instrument-sound>voice.alto</instrument-sound></score-instrument></score-part>
+    <score-part id="P3"><part-name>Tenor</part-name><score-instrument id="P3-I1"><instrument-name>Tenor</instrument-name><instrument-sound>voice.tenor</instrument-sound></score-instrument></score-part>
+    <score-part id="P4"><part-name>Bass</part-name><score-instrument id="P4-I1"><instrument-name>Bass</instrument-name><instrument-sound>voice.bass</instrument-sound></score-instrument></score-part>
   </part-list>
   ${buildPart('P1', 'G', 2, 0, soprano)}
   ${buildPart('P2', 'G', 2, 0, alto)}
   ${buildPart('P3', 'G', 2, -1, tenor)}
   ${buildPart('P4', 'F', 4, 0, bass)}
+</score-partwise>`;
+    }
+
+    /**
+     * Built-in 4-Part Classical Chamber Quartet Demo (Flute, Oboe, Violin, Violoncello)
+     * Demonstrates automatic classical instrument detection from MusicXML.
+     */
+    function getDemoEnsembleMusicXML() {
+        const makeNote = (step, octave, duration, type, alter = 0) => {
+            const alterTag = alter !== 0 ? `<alter>${alter}</alter>` : '';
+            return `<note><pitch><step>${step}</step>${alterTag}<octave>${octave}</octave></pitch><duration>${duration}</duration><voice>1</voice><type>${type}</type></note>`;
+        };
+
+        const buildPart = (id, clefSign, clefLine, measuresXml) => {
+            const attrs = `<attributes><divisions>2</divisions><key><fifths>1</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>${clefSign}</sign><line>${clefLine}</line></clef></attributes>`;
+            const tempoDir = id === 'P1'
+                ? `<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>104</per-minute></metronome></direction-type><sound tempo="104"/></direction>`
+                : '';
+            return `<part id="${id}">${measuresXml.map((m, i) => `<measure number="${i + 1}">${i === 0 ? attrs + tempoDir : ''}${m}</measure>`).join('')}</part>`;
+        };
+
+        // 8-bar Classical Quartet in G major (Flute, Oboe, Violin, Violoncello)
+        const flute = [
+            makeNote('D', 5, 4, 'half') + makeNote('B', 4, 2, 'quarter') + makeNote('G', 5, 2, 'quarter'),
+            makeNote('F', 5, 2, 'quarter', 1) + makeNote('E', 5, 2, 'quarter') + makeNote('D', 5, 4, 'half'),
+            makeNote('E', 5, 2, 'quarter') + makeNote('G', 5, 2, 'quarter') + makeNote('F', 5, 2, 'quarter', 1) + makeNote('E', 5, 2, 'quarter'),
+            makeNote('D', 5, 4, 'half') + makeNote('A', 5, 4, 'half'),
+            makeNote('B', 5, 2, 'quarter') + makeNote('G', 5, 2, 'quarter') + makeNote('E', 5, 2, 'quarter') + makeNote('C', 5, 2, 'quarter'),
+            makeNote('D', 5, 2, 'quarter') + makeNote('G', 5, 2, 'quarter') + makeNote('F', 5, 2, 'quarter', 1) + makeNote('G', 5, 2, 'quarter'),
+            makeNote('E', 5, 2, 'quarter') + makeNote('C', 5, 2, 'quarter') + makeNote('D', 5, 2, 'quarter') + makeNote('F', 5, 2, 'quarter', 1),
+            makeNote('G', 5, 8, 'whole'),
+        ];
+
+        const oboe = [
+            makeNote('B', 4, 4, 'half') + makeNote('G', 4, 2, 'quarter') + makeNote('B', 4, 2, 'quarter'),
+            makeNote('A', 4, 2, 'quarter') + makeNote('C', 5, 2, 'quarter') + makeNote('B', 4, 4, 'half'),
+            makeNote('C', 5, 2, 'quarter') + makeNote('B', 4, 2, 'quarter') + makeNote('A', 4, 2, 'quarter') + makeNote('G', 4, 2, 'quarter'),
+            makeNote('F', 4, 4, 'half', 1) + makeNote('D', 5, 4, 'half'),
+            makeNote('D', 5, 2, 'quarter') + makeNote('B', 4, 2, 'quarter') + makeNote('C', 5, 2, 'quarter') + makeNote('A', 4, 2, 'quarter'),
+            makeNote('B', 4, 2, 'quarter') + makeNote('B', 4, 2, 'quarter') + makeNote('A', 4, 2, 'quarter') + makeNote('B', 4, 2, 'quarter'),
+            makeNote('C', 5, 2, 'quarter') + makeNote('A', 4, 2, 'quarter') + makeNote('A', 4, 2, 'quarter') + makeNote('A', 4, 2, 'quarter'),
+            makeNote('B', 4, 8, 'whole'),
+        ];
+
+        const violin = [
+            makeNote('G', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter'),
+            makeNote('D', 4, 2, 'quarter') + makeNote('G', 4, 2, 'quarter') + makeNote('G', 4, 4, 'half'),
+            makeNote('G', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('C', 4, 2, 'quarter', 1),
+            makeNote('D', 4, 4, 'half') + makeNote('F', 4, 4, 'half', 1),
+            makeNote('G', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('G', 4, 2, 'quarter') + makeNote('E', 4, 2, 'quarter'),
+            makeNote('G', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter') + makeNote('D', 4, 2, 'quarter'),
+            makeNote('G', 4, 2, 'quarter') + makeNote('E', 4, 2, 'quarter') + makeNote('F', 4, 2, 'quarter', 1) + makeNote('D', 4, 2, 'quarter'),
+            makeNote('D', 4, 8, 'whole'),
+        ];
+
+        const cello = [
+            makeNote('G', 2, 4, 'half') + makeNote('G', 2, 2, 'quarter') + makeNote('E', 3, 2, 'quarter'),
+            makeNote('D', 3, 2, 'quarter') + makeNote('C', 3, 2, 'quarter') + makeNote('G', 2, 4, 'half'),
+            makeNote('C', 3, 2, 'quarter') + makeNote('G', 2, 2, 'quarter') + makeNote('A', 2, 2, 'quarter') + makeNote('A', 2, 2, 'quarter'),
+            makeNote('D', 3, 4, 'half') + makeNote('D', 3, 4, 'half'),
+            makeNote('G', 2, 2, 'quarter') + makeNote('B', 2, 2, 'quarter') + makeNote('C', 3, 2, 'quarter') + makeNote('A', 2, 2, 'quarter'),
+            makeNote('G', 2, 2, 'quarter') + makeNote('G', 2, 2, 'quarter') + makeNote('D', 3, 2, 'quarter') + makeNote('G', 2, 2, 'quarter'),
+            makeNote('C', 3, 2, 'quarter') + makeNote('A', 2, 2, 'quarter') + makeNote('D', 3, 2, 'quarter') + makeNote('D', 2, 2, 'quarter'),
+            makeNote('G', 2, 8, 'whole'),
+        ];
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <work><work-title>Quartet in G Major (Flute, Oboe, Violin, Cello)</work-title></work>
+  <identification><creator type="composer">PYP Classical Suite</creator></identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Flute</part-name>
+      <score-instrument id="P1-I1"><instrument-name>Flute</instrument-name><instrument-sound>wind.flutes.flute</instrument-sound></score-instrument>
+      <midi-instrument id="P1-I1"><midi-program>74</midi-program></midi-instrument>
+    </score-part>
+    <score-part id="P2">
+      <part-name>Oboe</part-name>
+      <score-instrument id="P2-I1"><instrument-name>Oboe</instrument-name><instrument-sound>wind.reed.oboe</instrument-sound></score-instrument>
+      <midi-instrument id="P2-I1"><midi-program>69</midi-program></midi-instrument>
+    </score-part>
+    <score-part id="P3">
+      <part-name>Violin</part-name>
+      <score-instrument id="P3-I1"><instrument-name>Violin</instrument-name><instrument-sound>strings.violin</instrument-sound></score-instrument>
+      <midi-instrument id="P3-I1"><midi-program>41</midi-program></midi-instrument>
+    </score-part>
+    <score-part id="P4">
+      <part-name>Violoncello</part-name>
+      <score-instrument id="P4-I1"><instrument-name>Violoncello</instrument-name><instrument-sound>strings.cello</instrument-sound></score-instrument>
+      <midi-instrument id="P4-I1"><midi-program>43</midi-program></midi-instrument>
+    </score-part>
+  </part-list>
+  ${buildPart('P1', 'G', 2, flute)}
+  ${buildPart('P2', 'G', 2, oboe)}
+  ${buildPart('P3', 'G', 2, violin)}
+  ${buildPart('P4', 'F', 4, cello)}
 </score-partwise>`;
     }
 
@@ -1856,7 +2931,13 @@
 
         if (dom.loadDemoScoreBtn) {
             dom.loadDemoScoreBtn.addEventListener('click', () => {
-                loadMusicXMLContent(getDemoChoraleMusicXML(), 'Chorale in C Major (Demo)');
+                loadMusicXMLContent(getDemoChoraleMusicXML(), 'Chorale in C Major (SATB)');
+            });
+        }
+
+        if (dom.loadDemoEnsembleBtn) {
+            dom.loadDemoEnsembleBtn.addEventListener('click', () => {
+                loadMusicXMLContent(getDemoEnsembleMusicXML(), 'Quartet in G Major (Fl/Ob/Vln/Vc)');
             });
         }
 
@@ -2104,18 +3185,24 @@
         if (dom.tempoUpBtn) dom.tempoUpBtn.addEventListener('click', () => applyTempoPercent(state.tempoPercent + 5));
         if (dom.tempoResetBtn) dom.tempoResetBtn.addEventListener('click', () => applyTempoPercent(100));
 
-        // Sound Patch Selector
+        // Global Instrument Preset / Override Selector
         if (dom.soundSelect) {
             dom.soundSelect.addEventListener('change', async () => {
-                state.soundPatch = dom.soundSelect.value;
-                if (state.audioInitialized) {
-                    if (state.soundPatch === 'piano' && !state.pianoBuffers && !state.pianoBuffersFailed) {
-                        await loadPianoBuffersOnce();
+                state.soundPreset = dom.soundSelect.value;
+                for (const part of Object.values(state.parts)) {
+                    if (state.soundPreset === 'auto') {
+                        part.patchId = part.detectedPatchId || 'piano';
+                    } else if (INSTRUMENT_CATALOG[state.soundPreset]) {
+                        part.patchId = state.soundPreset;
                     }
-                    buildPartAudioNodes();
                 }
-                const label = dom.soundSelect.options[dom.soundSelect.selectedIndex]?.textContent || state.soundPatch;
-                toast(`Sound: ${label}`);
+                renderPartMixerUI();
+
+                if (state.audioInitialized && Object.keys(state.parts).length > 0) {
+                    await loadAndBuildAllPartInstruments();
+                }
+                const label = dom.soundSelect.options[dom.soundSelect.selectedIndex]?.textContent || state.soundPreset;
+                toast(`Instruments: ${label}`);
             });
         }
 
@@ -2142,17 +3229,25 @@
             dom.cursorTypeSelect.addEventListener('change', applyCursorStyle);
         }
 
-        // Reset Mixer button
+        // Reset Mixer button (Restores volume, mute/solo, AND score-default instruments!)
         if (dom.resetMixerBtn) {
-            dom.resetMixerBtn.addEventListener('click', () => {
+            dom.resetMixerBtn.addEventListener('click', async () => {
+                state.soundPreset = 'auto';
+                if (dom.soundSelect) dom.soundSelect.value = 'auto';
+
                 for (const part of Object.values(state.parts)) {
                     part.volume = 100;
                     part.muted = false;
                     part.soloed = false;
+                    part.patchId = part.detectedPatchId || 'piano';
                 }
                 renderPartMixerUI();
-                applyAllPartGains(false);
-                toast('Part mixer reset');
+                if (state.audioInitialized && Object.keys(state.parts).length > 0) {
+                    await loadAndBuildAllPartInstruments();
+                } else {
+                    applyAllPartGains(false);
+                }
+                toast('Part mixer & instruments reset to score defaults');
             });
         }
 

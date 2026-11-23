@@ -167,11 +167,17 @@
                             </svg>
                             Open Score File
                         </button>
-                        <button class="cta-btn cta-secondary" id="loadDemoScoreBtn">
+                        <button class="cta-btn cta-secondary" id="loadDemoScoreBtn" title="Loads SATB Chorale — Singers automatically play on Grand Piano">
                             <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
                                 <path d="M8 5v14l11-7z"></path>
                             </svg>
-                            Try 4-Part Demo Chorale
+                            SATB Chorale (Singers → Piano)
+                        </button>
+                        <button class="cta-btn cta-secondary" id="loadDemoEnsembleBtn" title="Loads Classical Quartet — Flute, Oboe, Violin &amp; Cello">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
+                                <path d="M8 5v14l11-7z"></path>
+                            </svg>
+                            Classical Quartet (Fl/Ob/Vln/Vc)
                         </button>
                     </div>
                     <div class="quick-tips">
@@ -248,13 +254,15 @@
             </div>
 
             <div class="audio-controls-right">
-                <!-- Sound Patch Selector -->
+                <!-- Instrument Preset / Global Override Selector -->
                 <div class="select-group">
-                    <label for="soundSelect" class="select-label">Sound</label>
-                    <select id="soundSelect" class="compact-select" title="Playback Instrument Sound">
-                        <option value="piano">Grand Piano</option>
-                        <option value="organ">Soft Organ Pad</option>
-                        <option value="harpsichord">Harpsichord</option>
+                    <label for="soundSelect" class="select-label">Instruments</label>
+                    <select id="soundSelect" class="compact-select" title="Assign instruments automatically from the score or override all parts">
+                        <option value="auto">From Score (Singers → Piano)</option>
+                        <option value="piano">All Grand Piano</option>
+                        <option value="organ">All Pipe Organ</option>
+                        <option value="harpsichord">All Harpsichord</option>
+                        <option value="strings">All String Ensemble</option>
                     </select>
                 </div>
 

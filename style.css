@@ -1055,9 +1055,10 @@ kbd {
 
 .part-control-entry {
     display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
+    flex-direction: column;
+    gap: 5px;
+    padding: 7px 10px;
+    min-width: 178px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -1073,21 +1074,98 @@ kbd {
 
 .part-control-entry.is-soloed {
     border-color: var(--solo-color);
-    box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.2);
+    box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.22);
+}
+
+.part-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.part-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
 }
 
 .part-label {
     font-size: 12px;
     font-weight: 700;
     color: var(--text-primary);
-    max-width: 110px;
+    max-width: 105px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.part-role-tag {
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.part-instrument-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.part-instrument-select {
+    width: 100%;
+    height: 24px;
+    padding: 0 20px 0 7px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background-color: var(--surface-subtle);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2352657A' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    -webkit-appearance: none;
+    appearance: none;
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.part-instrument-select:hover {
+    border-color: var(--accent);
+    background-color: var(--surface-hover);
+}
+
+.part-instrument-select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.part-loading-dot {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: pyp-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+.part-volume-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .part-volume-slider {
-    width: 72px;
+    flex: 1 1 auto;
+    width: 100%;
     height: 4px;
     accent-color: var(--accent);
     cursor: pointer;
@@ -1099,7 +1177,7 @@ kbd {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-muted);
-    min-width: 28px;
+    min-width: 30px;
     text-align: right;
 }
 
