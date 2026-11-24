@@ -12,12 +12,11 @@
     const CONFIG = {
         OSMD_DRAWING_PARAMETERS: 'compacttight',
         SALAMANDER_BASE_URL: 'https://tonejs.github.io/audio/salamander/',
-        VSCO_BASE_URL: 'https://nbrosowsky.github.io/tonejs-instruments/samples/',
         DEFAULT_BPM: 100,
         DEFAULT_TEMPO_PERCENT: 100,
         DEFAULT_PART_VOLUME: 80,
         HIGHLIGHT_MAIN_VOLUME: 100,
-        HIGHLIGHT_OTHER_VOLUME: 50,
+        HIGHLIGHT_OTHER_VOLUME: 70,
         MIN_TEMPO_PERCENT: 25,
         MAX_TEMPO_PERCENT: 200,
         MIN_ZOOM: 0.5,
@@ -52,181 +51,16 @@
         'A7': 'A7.mp3', 'C8': 'C8.mp3',
     });
 
-    const VSCO_URLS = {
-        violin: buildUrlMap(`${CONFIG.VSCO_BASE_URL}violin/`, {
-            'A3': 'A3.mp3', 'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3',
-            'A4': 'A4.mp3', 'C5': 'C5.mp3', 'E5': 'E5.mp3', 'G5': 'G5.mp3',
-            'A5': 'A5.mp3', 'C6': 'C6.mp3', 'E6': 'E6.mp3', 'G6': 'G6.mp3',
-            'A6': 'A6.mp3', 'C7': 'C7.mp3',
-        }),
-        cello: buildUrlMap(`${CONFIG.VSCO_BASE_URL}cello/`, {
-            'C2': 'C2.mp3', 'E2': 'E2.mp3', 'G2': 'G2.mp3', 'A2': 'A2.mp3',
-            'C3': 'C3.mp3', 'E3': 'E3.mp3', 'G3': 'G3.mp3', 'A3': 'A3.mp3',
-            'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3', 'A4': 'A4.mp3',
-            'C5': 'C5.mp3',
-        }),
-        contrabass: buildUrlMap(`${CONFIG.VSCO_BASE_URL}contrabass/`, {
-            'F#1': 'Fs1.mp3', 'G1': 'G1.mp3', 'A#1': 'As1.mp3', 'C2': 'C2.mp3',
-            'D2': 'D2.mp3', 'E2': 'E2.mp3', 'F#2': 'Fs2.mp3', 'G#2': 'Gs2.mp3',
-            'A2': 'A2.mp3', 'C#3': 'Cs3.mp3', 'E3': 'E3.mp3', 'G#3': 'Gs3.mp3',
-            'B3': 'B3.mp3',
-        }),
-        flute: buildUrlMap(`${CONFIG.VSCO_BASE_URL}flute/`, {
-            'C4': 'C4.mp3', 'E4': 'E4.mp3', 'A4': 'A4.mp3',
-            'C5': 'C5.mp3', 'E5': 'E5.mp3', 'A5': 'A5.mp3',
-            'C6': 'C6.mp3', 'E6': 'E6.mp3', 'A6': 'A6.mp3', 'C7': 'C7.mp3',
-        }),
-        clarinet: buildUrlMap(`${CONFIG.VSCO_BASE_URL}clarinet/`, {
-            'D3': 'D3.mp3', 'F3': 'F3.mp3', 'A#3': 'As3.mp3',
-            'D4': 'D4.mp3', 'F4': 'F4.mp3', 'A#4': 'As4.mp3',
-            'D5': 'D5.mp3', 'F5': 'F5.mp3', 'A#5': 'As5.mp3',
-            'D6': 'D6.mp3', 'F#6': 'Fs6.mp3',
-        }),
-        bassoon: buildUrlMap(`${CONFIG.VSCO_BASE_URL}bassoon/`, {
-            'G2': 'G2.mp3', 'A2': 'A2.mp3', 'C3': 'C3.mp3', 'G3': 'G3.mp3',
-            'A3': 'A3.mp3', 'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3',
-            'A4': 'A4.mp3', 'C5': 'C5.mp3',
-        }),
-        frenchHorn: buildUrlMap(`${CONFIG.VSCO_BASE_URL}french-horn/`, {
-            'A1': 'A1.mp3', 'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'G2': 'G2.mp3',
-            'D3': 'D3.mp3', 'F3': 'F3.mp3', 'A3': 'A3.mp3', 'C4': 'C4.mp3',
-            'D5': 'D5.mp3', 'F5': 'F5.mp3',
-        }),
-        trumpet: buildUrlMap(`${CONFIG.VSCO_BASE_URL}trumpet/`, {
-            'F3': 'F3.mp3', 'A3': 'A3.mp3', 'C4': 'C4.mp3', 'D#4': 'Ds4.mp3',
-            'F4': 'F4.mp3', 'G4': 'G4.mp3', 'A#4': 'As4.mp3', 'D5': 'D5.mp3',
-            'F5': 'F5.mp3', 'A5': 'A5.mp3', 'C6': 'C6.mp3',
-        }),
-        trombone: buildUrlMap(`${CONFIG.VSCO_BASE_URL}trombone/`, {
-            'A#1': 'As1.mp3', 'C#2': 'Cs2.mp3', 'D#2': 'Ds2.mp3', 'F2': 'F2.mp3',
-            'G#2': 'Gs2.mp3', 'A#2': 'As2.mp3', 'C3': 'C3.mp3', 'D#3': 'Ds3.mp3',
-            'F3': 'F3.mp3', 'G#3': 'Gs3.mp3', 'A#3': 'As3.mp3', 'C4': 'C4.mp3',
-            'D4': 'D4.mp3', 'F4': 'F4.mp3',
-        }),
-        tuba: buildUrlMap(`${CONFIG.VSCO_BASE_URL}tuba/`, {
-            'F1': 'F1.mp3', 'A#1': 'As1.mp3', 'D#2': 'Ds2.mp3', 'F2': 'F2.mp3',
-            'A#2': 'As2.mp3', 'D3': 'D3.mp3', 'F3': 'F3.mp3', 'A#3': 'As3.mp3',
-            'D4': 'D4.mp3',
-        }),
-        harp: buildUrlMap(`${CONFIG.VSCO_BASE_URL}harp/`, {
-            'E1': 'E1.mp3', 'G1': 'G1.mp3', 'B1': 'B1.mp3', 'D2': 'D2.mp3',
-            'F2': 'F2.mp3', 'A2': 'A2.mp3', 'C3': 'C3.mp3', 'E3': 'E3.mp3',
-            'G3': 'G3.mp3', 'B3': 'B3.mp3', 'D4': 'D4.mp3', 'F4': 'F4.mp3',
-            'A4': 'A4.mp3', 'C5': 'C5.mp3', 'E5': 'E5.mp3', 'G5': 'G5.mp3',
-            'B5': 'B5.mp3', 'D6': 'D6.mp3', 'F6': 'F6.mp3', 'A6': 'A6.mp3',
-            'B6': 'B6.mp3', 'D7': 'D7.mp3',
-        }),
-        organ: buildUrlMap(`${CONFIG.VSCO_BASE_URL}organ/`, {
-            'C1': 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3', 'A1': 'A1.mp3',
-            'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3', 'A2': 'A2.mp3',
-            'C3': 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3', 'A3': 'A3.mp3',
-            'C4': 'C4.mp3', 'D#4': 'Ds4.mp3', 'F#4': 'Fs4.mp3', 'A4': 'A4.mp3',
-            'C5': 'C5.mp3', 'D#5': 'Ds5.mp3', 'F#5': 'Fs5.mp3', 'A5': 'A5.mp3',
-            'C6': 'C6.mp3',
-        }),
-        harmonium: buildUrlMap(`${CONFIG.VSCO_BASE_URL}harmonium/`, {
-            'C2': 'C2.mp3', 'E2': 'E2.mp3', 'G2': 'G2.mp3', 'A2': 'A2.mp3',
-            'C3': 'C3.mp3', 'E3': 'E3.mp3', 'G3': 'G3.mp3', 'A3': 'A3.mp3',
-            'C4': 'C4.mp3', 'E4': 'E4.mp3', 'G4': 'G4.mp3', 'A4': 'A4.mp3',
-            'C5': 'C5.mp3', 'D5': 'D5.mp3',
-        }),
-        guitarNylon: buildUrlMap(`${CONFIG.VSCO_BASE_URL}guitar-nylon/`, {
-            'B1': 'B1.mp3', 'D2': 'D2.mp3', 'E2': 'E2.mp3', 'F#2': 'Fs2.mp3',
-            'G#2': 'Gs2.mp3', 'A2': 'A2.mp3', 'B2': 'B2.mp3', 'D3': 'D3.mp3',
-            'E3': 'E3.mp3', 'G3': 'G3.mp3', 'A3': 'A3.mp3', 'B3': 'B3.mp3',
-            'C#4': 'Cs4.mp3', 'E4': 'E4.mp3', 'G#4': 'Gs4.mp3', 'A4': 'A4.mp3',
-            'B4': 'B4.mp3', 'D5': 'D5.mp3', 'E5': 'E5.mp3', 'A5': 'A5.mp3',
-        }),
-        saxophone: buildUrlMap(`${CONFIG.VSCO_BASE_URL}saxophone/`, {
-            'D3': 'D3.mp3', 'F3': 'F3.mp3', 'G#3': 'Gs3.mp3', 'B3': 'B3.mp3',
-            'D4': 'D4.mp3', 'F4': 'F4.mp3', 'G#4': 'Gs4.mp3', 'B4': 'B4.mp3',
-            'D5': 'D5.mp3', 'F5': 'F5.mp3', 'G#5': 'Gs5.mp3', 'A5': 'A5.mp3',
-        }),
-        xylophone: buildUrlMap(`${CONFIG.VSCO_BASE_URL}xylophone/`, {
-            'G4': 'G4.mp3', 'C5': 'C5.mp3', 'G5': 'G5.mp3', 'C6': 'C6.mp3',
-            'G6': 'G6.mp3', 'C7': 'C7.mp3', 'G7': 'G7.mp3', 'C8': 'C8.mp3',
-        }),
-    };
-
-    // Composite acoustic multi-sample maps for Viola, Oboe, English Horn, String Ensemble, and Piccolo
-    const COMPOSITE_URLS = {
-        viola: {
-            'C3': `${CONFIG.VSCO_BASE_URL}cello/C3.mp3`,
-            'D3': `${CONFIG.VSCO_BASE_URL}cello/D3.mp3`,
-            'E3': `${CONFIG.VSCO_BASE_URL}cello/E3.mp3`,
-            'F3': `${CONFIG.VSCO_BASE_URL}cello/F3.mp3`,
-            'G3': `${CONFIG.VSCO_BASE_URL}cello/G3.mp3`,
-            'A3': `${CONFIG.VSCO_BASE_URL}cello/A3.mp3`,
-            'B3': `${CONFIG.VSCO_BASE_URL}cello/B3.mp3`,
-            'C4': `${CONFIG.VSCO_BASE_URL}violin/C4.mp3`,
-            'E4': `${CONFIG.VSCO_BASE_URL}violin/E4.mp3`,
-            'G4': `${CONFIG.VSCO_BASE_URL}violin/G4.mp3`,
-            'A4': `${CONFIG.VSCO_BASE_URL}violin/A4.mp3`,
-            'C5': `${CONFIG.VSCO_BASE_URL}violin/C5.mp3`,
-            'E5': `${CONFIG.VSCO_BASE_URL}violin/E5.mp3`,
-            'G5': `${CONFIG.VSCO_BASE_URL}violin/G5.mp3`,
-            'A5': `${CONFIG.VSCO_BASE_URL}violin/A5.mp3`,
-            'C6': `${CONFIG.VSCO_BASE_URL}violin/C6.mp3`,
-        },
-        strings: {
-            'G1': `${CONFIG.VSCO_BASE_URL}contrabass/G1.mp3`,
-            'C2': `${CONFIG.VSCO_BASE_URL}cello/C2.mp3`,
-            'E2': `${CONFIG.VSCO_BASE_URL}cello/E2.mp3`,
-            'G2': `${CONFIG.VSCO_BASE_URL}cello/G2.mp3`,
-            'A2': `${CONFIG.VSCO_BASE_URL}cello/A2.mp3`,
-            'C3': `${CONFIG.VSCO_BASE_URL}cello/C3.mp3`,
-            'E3': `${CONFIG.VSCO_BASE_URL}cello/E3.mp3`,
-            'G3': `${CONFIG.VSCO_BASE_URL}cello/G3.mp3`,
-            'A3': `${CONFIG.VSCO_BASE_URL}violin/A3.mp3`,
-            'C4': `${CONFIG.VSCO_BASE_URL}violin/C4.mp3`,
-            'E4': `${CONFIG.VSCO_BASE_URL}violin/E4.mp3`,
-            'G4': `${CONFIG.VSCO_BASE_URL}violin/G4.mp3`,
-            'A4': `${CONFIG.VSCO_BASE_URL}violin/A4.mp3`,
-            'C5': `${CONFIG.VSCO_BASE_URL}violin/C5.mp3`,
-            'E5': `${CONFIG.VSCO_BASE_URL}violin/E5.mp3`,
-            'G5': `${CONFIG.VSCO_BASE_URL}violin/G5.mp3`,
-            'A5': `${CONFIG.VSCO_BASE_URL}violin/A5.mp3`,
-            'C6': `${CONFIG.VSCO_BASE_URL}violin/C6.mp3`,
-            'E6': `${CONFIG.VSCO_BASE_URL}violin/E6.mp3`,
-            'A6': `${CONFIG.VSCO_BASE_URL}violin/A6.mp3`,
-            'C7': `${CONFIG.VSCO_BASE_URL}violin/C7.mp3`,
-        },
-        oboe: {
-            'A3': `${CONFIG.VSCO_BASE_URL}bassoon/A3.mp3`,
-            'C4': `${CONFIG.VSCO_BASE_URL}bassoon/C4.mp3`,
-            'E4': `${CONFIG.VSCO_BASE_URL}bassoon/E4.mp3`,
-            'G4': `${CONFIG.VSCO_BASE_URL}bassoon/G4.mp3`,
-            'A4': `${CONFIG.VSCO_BASE_URL}bassoon/A4.mp3`,
-            'C5': `${CONFIG.VSCO_BASE_URL}bassoon/C5.mp3`,
-            'D5': `${CONFIG.VSCO_BASE_URL}clarinet/D5.mp3`,
-            'F5': `${CONFIG.VSCO_BASE_URL}clarinet/F5.mp3`,
-            'A#5': `${CONFIG.VSCO_BASE_URL}clarinet/As5.mp3`,
-            'D6': `${CONFIG.VSCO_BASE_URL}clarinet/D6.mp3`,
-            'F#6': `${CONFIG.VSCO_BASE_URL}clarinet/Fs6.mp3`,
-        },
-        englishHorn: {
-            'G3': `${CONFIG.VSCO_BASE_URL}bassoon/G3.mp3`,
-            'A3': `${CONFIG.VSCO_BASE_URL}bassoon/A3.mp3`,
-            'C4': `${CONFIG.VSCO_BASE_URL}bassoon/C4.mp3`,
-            'E4': `${CONFIG.VSCO_BASE_URL}bassoon/E4.mp3`,
-            'G4': `${CONFIG.VSCO_BASE_URL}bassoon/G4.mp3`,
-            'A4': `${CONFIG.VSCO_BASE_URL}bassoon/A4.mp3`,
-            'C5': `${CONFIG.VSCO_BASE_URL}bassoon/C5.mp3`,
-            'D5': `${CONFIG.VSCO_BASE_URL}clarinet/D5.mp3`,
-            'F5': `${CONFIG.VSCO_BASE_URL}clarinet/F5.mp3`,
-        },
-    };
-
     /**
-     * Classical Instrument Catalog
-     * Ordered and grouped by musical family for the per-part Mixer selector.
+     * Instrument Catalog
+     * Strictly contains the 2 core rehearsal instruments:
+     * 1. Grand Piano (Salamander multi-sample acoustic grand)
+     * 2. Smooth Wave (Warm, pitch-accurate harmonic wave tailored for vocal rehearsal)
      */
     const INSTRUMENT_CATALOG = {
-        // --- Keyboard & Vocal Rehearsal ---
         'piano': {
             id: 'piano',
             label: 'Grand Piano',
-            category: 'Keyboard & Vocal',
             urls: SALAMANDER_PIANO_URLS,
             release: 0.85,
             attack: 0.005,
@@ -234,270 +68,16 @@
             durationFactor: 0.95,
             synthFamily: 'piano',
         },
-        'organ': {
-            id: 'organ',
-            label: 'Pipe Organ',
-            category: 'Keyboard & Vocal',
-            urls: VSCO_URLS.organ,
-            release: 0.25,
-            attack: 0.02,
-            volumeDb: -5,
-            durationFactor: 0.99,
-            synthFamily: 'organ',
-        },
-        'harpsichord': {
-            id: 'harpsichord',
-            label: 'Harpsichord (Cembalo)',
-            category: 'Keyboard & Vocal',
-            urls: VSCO_URLS.harp,
-            release: 0.35,
-            attack: 0.003,
-            volumeDb: -3,
-            durationFactor: 0.92,
-            filter: { type: 'highpass', frequency: 240, Q: 0.9 },
-            synthFamily: 'plucked',
-        },
-        'harmonium': {
-            id: 'harmonium',
-            label: 'Harmonium / Reed Organ',
-            category: 'Keyboard & Vocal',
-            urls: VSCO_URLS.harmonium,
-            release: 0.25,
-            attack: 0.025,
-            volumeDb: -5,
-            durationFactor: 0.98,
-            synthFamily: 'organ',
-        },
-
-        // --- Strings ---
-        'violin': {
-            id: 'violin',
-            label: 'Violin',
-            category: 'Strings',
-            urls: VSCO_URLS.violin,
-            release: 0.38,
-            attack: 0.025,
-            volumeDb: -4,
-            durationFactor: 0.98,
-            synthFamily: 'strings',
-        },
-        'viola': {
-            id: 'viola',
-            label: 'Viola',
-            category: 'Strings',
-            urls: COMPOSITE_URLS.viola,
-            release: 0.38,
-            attack: 0.025,
-            volumeDb: -3,
-            durationFactor: 0.98,
-            filter: { type: 'lowpass', frequency: 3300, Q: 0.7 },
-            synthFamily: 'strings',
-        },
-        'cello': {
-            id: 'cello',
-            label: 'Violoncello (Cello)',
-            category: 'Strings',
-            urls: VSCO_URLS.cello,
-            release: 0.42,
-            attack: 0.025,
-            volumeDb: -3,
-            durationFactor: 0.98,
-            synthFamily: 'strings',
-        },
-        'contrabass': {
-            id: 'contrabass',
-            label: 'Contrabass (Double Bass)',
-            category: 'Strings',
-            urls: VSCO_URLS.contrabass,
-            release: 0.45,
-            attack: 0.03,
-            volumeDb: -2,
-            durationFactor: 0.98,
-            synthFamily: 'strings',
-        },
-        'strings': {
-            id: 'strings',
-            label: 'String Ensemble',
-            category: 'Strings',
-            urls: COMPOSITE_URLS.strings,
-            release: 0.48,
-            attack: 0.035,
-            volumeDb: -4,
-            durationFactor: 0.99,
-            synthFamily: 'strings',
-        },
-        'harp': {
-            id: 'harp',
-            label: 'Concert Harp',
-            category: 'Strings',
-            urls: VSCO_URLS.harp,
-            release: 1.1,
-            attack: 0.005,
-            volumeDb: -2,
-            durationFactor: 1.0,
-            synthFamily: 'plucked',
-        },
-        'guitar-nylon': {
-            id: 'guitar-nylon',
-            label: 'Classical Guitar',
-            category: 'Strings',
-            urls: VSCO_URLS.guitarNylon,
-            release: 0.75,
-            attack: 0.005,
-            volumeDb: -3,
-            durationFactor: 0.96,
-            synthFamily: 'plucked',
-        },
-
-        // --- Woodwinds ---
-        'flute': {
-            id: 'flute',
-            label: 'Flute',
-            category: 'Woodwinds',
-            urls: VSCO_URLS.flute,
-            release: 0.28,
-            attack: 0.02,
-            volumeDb: -3,
-            durationFactor: 0.96,
-            synthFamily: 'woodwind',
-        },
-        'piccolo': {
-            id: 'piccolo',
-            label: 'Piccolo',
-            category: 'Woodwinds',
-            urls: VSCO_URLS.flute,
-            release: 0.22,
-            attack: 0.015,
-            volumeDb: -4,
-            durationFactor: 0.95,
-            synthFamily: 'woodwind',
-        },
-        'oboe': {
-            id: 'oboe',
-            label: 'Oboe',
-            category: 'Woodwinds',
-            urls: COMPOSITE_URLS.oboe,
-            release: 0.25,
+        'wave': {
+            id: 'wave',
+            label: 'Smooth Wave',
+            urls: null, // Pure, warm harmonic wave with clear pitch center & full sustain for singing
+            release: 0.14,
             attack: 0.018,
-            volumeDb: -3,
-            durationFactor: 0.97,
-            filter: { type: 'peaking', frequency: 1450, Q: 1.8, gain: 7 },
-            synthFamily: 'reed',
-        },
-        'english-horn': {
-            id: 'english-horn',
-            label: 'English Horn (Cor Anglais)',
-            category: 'Woodwinds',
-            urls: COMPOSITE_URLS.englishHorn,
-            release: 0.28,
-            attack: 0.02,
-            volumeDb: -3,
-            durationFactor: 0.97,
-            filter: { type: 'peaking', frequency: 1050, Q: 1.6, gain: 6 },
-            synthFamily: 'reed',
-        },
-        'clarinet': {
-            id: 'clarinet',
-            label: 'Clarinet',
-            category: 'Woodwinds',
-            urls: VSCO_URLS.clarinet,
-            release: 0.26,
-            attack: 0.018,
-            volumeDb: -3,
-            durationFactor: 0.97,
-            synthFamily: 'woodwind',
-        },
-        'bassoon': {
-            id: 'bassoon',
-            label: 'Bassoon (Fagotto)',
-            category: 'Woodwinds',
-            urls: VSCO_URLS.bassoon,
-            release: 0.3,
-            attack: 0.02,
             volumeDb: -2,
-            durationFactor: 0.97,
-            synthFamily: 'reed',
-        },
-        'saxophone': {
-            id: 'saxophone',
-            label: 'Saxophone',
-            category: 'Woodwinds',
-            urls: VSCO_URLS.saxophone,
-            release: 0.28,
-            attack: 0.018,
-            volumeDb: -4,
-            durationFactor: 0.96,
-            synthFamily: 'reed',
-        },
-
-        // --- Brass ---
-        'french-horn': {
-            id: 'french-horn',
-            label: 'French Horn (Corno)',
-            category: 'Brass',
-            urls: VSCO_URLS.frenchHorn,
-            release: 0.32,
-            attack: 0.022,
-            volumeDb: -3,
-            durationFactor: 0.97,
-            synthFamily: 'brass',
-        },
-        'trumpet': {
-            id: 'trumpet',
-            label: 'Trumpet (Tromba)',
-            category: 'Brass',
-            urls: VSCO_URLS.trumpet,
-            release: 0.26,
-            attack: 0.015,
-            volumeDb: -5,
-            durationFactor: 0.96,
-            synthFamily: 'brass',
-        },
-        'trombone': {
-            id: 'trombone',
-            label: 'Trombone (Posaune)',
-            category: 'Brass',
-            urls: VSCO_URLS.trombone,
-            release: 0.3,
-            attack: 0.02,
-            volumeDb: -4,
-            durationFactor: 0.97,
-            synthFamily: 'brass',
-        },
-        'tuba': {
-            id: 'tuba',
-            label: 'Tuba',
-            category: 'Brass',
-            urls: VSCO_URLS.tuba,
-            release: 0.34,
-            attack: 0.025,
-            volumeDb: -3,
-            durationFactor: 0.97,
-            synthFamily: 'brass',
-        },
-
-        // --- Percussion & Mallets ---
-        'timpani': {
-            id: 'timpani',
-            label: 'Timpani (Pauken)',
-            category: 'Percussion',
-            urls: null, // Uses tuned orchestral kettle-drum synth
-            release: 0.8,
-            attack: 0.004,
-            volumeDb: -2,
-            durationFactor: 0.9,
-            synthFamily: 'timpani',
-        },
-        'xylophone': {
-            id: 'xylophone',
-            label: 'Xylophone / Mallets',
-            category: 'Percussion',
-            urls: VSCO_URLS.xylophone,
-            release: 0.5,
-            attack: 0.003,
-            volumeDb: -4,
-            durationFactor: 0.92,
-            synthFamily: 'plucked',
+            durationFactor: 0.98,
+            filter: { type: 'lowpass', frequency: 2400, Q: 0.6 },
+            synthFamily: 'wave',
         },
     };
 
@@ -508,6 +88,7 @@
     const dom = {
         brandHomeBtn: document.getElementById('brandHomeBtn'),
         loadScoreButton: document.getElementById('loadScoreButton'),
+        scoresFolderSelect: document.getElementById('scoresFolderSelect'),
         welcomeOpenBtn: document.getElementById('welcomeOpenBtn'),
         loadDemoScoreBtn: document.getElementById('loadDemoScoreBtn'),
         loadDemoEnsembleBtn: document.getElementById('loadDemoEnsembleBtn'),
@@ -603,6 +184,7 @@
 
         // Extracted score structures
         notes: [],          // { ticks, durationWhole, midi, partId, velocity, stepIdx }
+        allScoreNotes: [],  // Full note list preserved even when individual staves are visually hidden
         cursorSteps: [],    // { stepIdx, ticks, realValue, measureIndex, x, y, height, svgNotes }
         barData: [],        // { barNumber, measureIndex, startTicks, endTicks, numerator, denominator, bpm }
         metronomeBeats: [], // { ticks, isDownbeat }
@@ -628,7 +210,7 @@
         instrumentBuffers: {},      // { [patchId]: Tone.ToneAudioBuffers }
         instrumentLoadPromises: {}, // { [patchId]: Promise<Tone.ToneAudioBuffers | null> }
         instrumentFailed: {},       // { [patchId]: boolean }
-        soundPreset: 'auto',        // 'auto' = from score (Singers -> Piano), or global patchId override
+        soundPreset: 'piano',       // 'piano', 'harpsichord', 'wave', or 'custom'
         concertPitchHz: CONFIG.DEFAULT_PITCH_HZ,
         masterVolume: 80,
         masterMuted: false,
@@ -688,9 +270,7 @@
     }
 
     /**
-     * Determines the best classical instrument patch for a score part.
-     * RULE: Any Singer / Vocal / SATB / Choir part is ALWAYS mapped to 'piano' (Grand Piano).
-     * All classical orchestral/chamber instruments map to their corresponding acoustic samples.
+     * Determines whether a part is a vocal part and sets its default instrument patch ('piano' or 'harpsichord').
      */
     function detectPartInstrument(partInfo, allPartInfos = []) {
         const rawText = [
@@ -704,208 +284,46 @@
         const soundId = (partInfo.xmlMeta?.instrumentSound || '').toLowerCase().trim();
         const hasLyrics = Boolean(partInfo.hasLyrics);
 
-        // Normalize MIDI program to 1-indexed General MIDI (1..128)
         let gmProg1 = null;
         if (typeof partInfo.xmlMeta?.midiProgram === 'number' && !Number.isNaN(partInfo.xmlMeta.midiProgram)) {
             gmProg1 = partInfo.xmlMeta.midiProgram;
         } else if (typeof partInfo.midiInstrumentId === 'number' && !Number.isNaN(partInfo.midiInstrumentId)) {
-            // OSMD stores 0-indexed MidiInstrumentId (or 1-indexed in some cases)
             gmProg1 = partInfo.midiInstrumentId <= 127 ? partInfo.midiInstrumentId + 1 : partInfo.midiInstrumentId;
         }
 
-        // Check if any sibling part is explicitly vocal (helps disambiguate "Alto" and "Bass" in SATB scores)
         const scoreHasExplicitVocalSibling = allPartInfos.some((p) => {
             const t = `${p.name || ''} ${p.xmlMeta?.partName || ''} ${p.xmlMeta?.instrumentSound || ''}`.toLowerCase();
             return /\b(sopran|soprano|sopraan|mezzo|contralto|countertenor|tenor|tenore|bariton|baritone|choir|chorus|koor|coro|chor|voce|vocal|voice|singstimme|zang|canto|cantus)\b/.test(t) ||
                 Boolean(p.hasLyrics);
         });
 
-        // Helper: check if text contains an explicit non-vocal instrument noun
-        // (so "Soprano Saxophone", "Tenor Trombone", "Alto Flute", "Bass Clarinet", "Double Bass", "Basso Continuo" are not treated as singers)
         const hasInstrumentalNoun = /\b(sax|saxophone|saxofoon|trombone|posaune|flute|flauto|flöte|fluit|recorder|blockflöte|blokfluit|oboe|hobo|hautbois|clarinet|clarinetto|klarinette|klarinet|bassoon|fagotto|fagott|fagot|horn|corno|hoorn|trumpet|tromba|trompete|trompet|tuba|violin|violino|violine|viool|viola|bratsche|altviool|cello|violoncello|contrabass|kontrabass|contrebasse|contrabas|double\s*bass|string\s*bass|violone|continuo|cembalo|harpsichord|klavecimbel|clavecin|organ|organo|orgel|orgue|harmonium|piano|pianoforte|klavier|harp|arpa|harfe|guitar|chitarra|gitarre|gitaar|timpani|pauken|xylophone|marimba|glockenspiel|drum|percussion)\b/.test(rawText);
 
-        // --------------------------------------------------
-        // 1. SINGERS / VOCAL PARTS -> GRAND PIANO ('piano')
-        // --------------------------------------------------
+        // 1. Vocal detection
         if (soundId.startsWith('voice.') || soundId.includes('vocal') || soundId.includes('choir')) {
-            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal' };
         }
 
-        // Explicit vocal keywords (when not modifying an instrument like "Tenor Saxophone" or "Bass Clarinet")
         const hasExplicitVocalWord = /\b(soprano|sopraan|sopran|mezzo[-\s]*soprano|mezzo|contralto|countertenor|contratenor|tenor|tenore|baritone|bariton|baritono|baryton|voice|voices|vocal|voce|voci|stimme|singstimme|zang|canto|cantus|altus|bassus|quintus|sextus|choir|chorus|koor|chor|coro|chœur|choeur|soli|soloist|singer|satb|ssa|ssaa|ttbb|sab)\b/.test(rawText);
-
         if (hasExplicitVocalWord && !hasInstrumentalNoun) {
-            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal' };
         }
 
-        // Shorthand vocal part names: "S", "A", "T", "B", "S1", "S2", "A1", "A2", "T1", "T2", "B1", "B2", "S.", "A.", "T.", "B."
         if (/^(s|a|t|b|sop|alt|ten|bas|sopr)\.?(\s*[1234i]+)?$/i.test(partInfo.name.trim()) && !hasInstrumentalNoun) {
-            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal' };
         }
 
-        // "Alto" / "Alt" or "Bass" / "Bas" / "Basso" without an instrumental noun
         const isBareAltoOrBass = /\b(alto|alt|bass|bas|basso)\b/.test(rawText) && !hasInstrumentalNoun;
         if (isBareAltoOrBass) {
-            // In French orchestral scores without vocals, "Alto" can be Viola (GM 42) and "Basso" can be Contrabass (GM 44)
             const isGmViola = gmProg1 === 42 && !hasLyrics && !scoreHasExplicitVocalSibling;
             const isGmContrabass = (gmProg1 === 43 || gmProg1 === 44) && !hasLyrics && !scoreHasExplicitVocalSibling;
             if (!isGmViola && !isGmContrabass) {
-                return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
+                return { patchId: 'piano', isVocal: true, roleTag: 'Vocal' };
             }
         }
 
-        // Any part with vocal lyrics (unless explicitly labeled Piano/Organ/Harpsichord/Guitar)
         if (hasLyrics && !hasInstrumentalNoun) {
-            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
-        }
-
-        // --------------------------------------------------
-        // 2. MUSICXML <instrument-sound> STANDARD TAXONOMY
-        // --------------------------------------------------
-        if (soundId) {
-            if (soundId.includes('piccolo')) return { patchId: 'piccolo', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('flute') || soundId.includes('recorder')) return { patchId: 'flute', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('english-horn') || soundId.includes('cor-anglais')) return { patchId: 'english-horn', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('oboe')) return { patchId: 'oboe', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('clarinet')) return { patchId: 'clarinet', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('bassoon') || soundId.includes('contrabassoon')) return { patchId: 'bassoon', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('saxophone')) return { patchId: 'saxophone', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('horn')) return { patchId: 'french-horn', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('trumpet') || soundId.includes('cornet') || soundId.includes('flugelhorn')) return { patchId: 'trumpet', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('trombone')) return { patchId: 'trombone', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('tuba') || soundId.includes('euphonium')) return { patchId: 'tuba', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('violin')) return { patchId: 'violin', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('viola')) return { patchId: 'viola', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('cello') || soundId.includes('violoncello')) return { patchId: 'cello', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('contrabass') || soundId.includes('double-bass')) return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('harp')) return { patchId: 'harp', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('guitar') || soundId.includes('lute') || soundId.includes('pluck')) return { patchId: 'guitar-nylon', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('harpsichord') || soundId.includes('clavichord')) return { patchId: 'harpsichord', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('harmonium') || soundId.includes('accordion')) return { patchId: 'harmonium', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('organ')) return { patchId: 'organ', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('piano') || soundId.includes('keyboard')) return { patchId: 'piano', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('timpani')) return { patchId: 'timpani', isVocal: false, roleTag: 'Score' };
-            if (soundId.includes('xylophone') || soundId.includes('marimba') || soundId.includes('glockenspiel') || soundId.includes('vibraphone')) {
-                return { patchId: 'xylophone', isVocal: false, roleTag: 'Score' };
-            }
-            if (soundId.startsWith('strings.')) return { patchId: 'strings', isVocal: false, roleTag: 'Score' };
-        }
-
-        // --------------------------------------------------
-        // 3. CLASSICAL PART NAME MATCHING (EN / IT / DE / FR / NL)
-        // --------------------------------------------------
-        // Woodwinds
-        if (/\b(piccolo|ottavino|kleine\s*flöte|picc\.?)\b/.test(rawText)) return { patchId: 'piccolo', isVocal: false, roleTag: 'Score' };
-        if (/\b(flute|flutes|flauto|flauti|flöte|flöten|flûte|fluit|dwarsfluit|recorder|blockflöte|blokfluit|traverso)\b/.test(rawText) || /^fl\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'flute', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(english\s*horn|cor\s*anglais|englischhorn|corno\s*inglese|althobo)\b/.test(rawText)) {
-            return { patchId: 'english-horn', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(oboe|oboes|oboi|hautbois|hobo)\b/.test(rawText) || /^ob\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'oboe', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(clarinet|clarinets|clarinetto|clarinetti|klarinette|klarinetten|clarinette|klarinet|basset\s*horn)\b/.test(rawText) || /^cl\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'clarinet', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(bassoon|bassoons|fagotto|fagotti|fagott|fagotte|fagot|basson|contrabassoon|contrafagotto|kontrafagott)\b/.test(rawText) || /^(bsn|fg)\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'bassoon', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(saxophone|saxofoon|saxophon|sax)\b/.test(rawText)) {
-            return { patchId: 'saxophone', isVocal: false, roleTag: 'Score' };
-        }
-
-        // Brass
-        if (/\b(french\s*horn|horn|horns|corno|corni|waldhorn|hoorn|hoorns|cor\s+in|cor\s+en)\b/.test(rawText) || /^(hn|cor)\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'french-horn', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(trumpet|trumpets|tromba|trombe|trompete|trompeten|trompette|trompet|cornet|clarino|flugelhorn)\b/.test(rawText) || /^(tpt|tr|trp)\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'trumpet', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(trombone|trombones|posaune|posaunen|sackbut)\b/.test(rawText) || /^(trb|tbn|pos)\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'trombone', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(tuba|euphonium|bombardino|ophicleide|sousaphone)\b/.test(rawText)) {
-            return { patchId: 'tuba', isVocal: false, roleTag: 'Score' };
-        }
-
-        // Strings (Check Contrabass before Cello/Bass; Viola before Violin)
-        if (/\b(contrabass|kontrabass|contrebasse|contrabas|double\s*bass|string\s*bass|violone)\b/.test(rawText) || /^(cb|db|kb)\.?$/i.test(abbrev)) {
-            return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(violoncello|violoncelli|violoncelle|violoncel|cello|celli)\b/.test(rawText) || /^(vc|vlc)\.?$/i.test(abbrev)) {
-            return { patchId: 'cello', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(viola|viole|bratsche|altviool|viola\s+da\s+gamba)\b/.test(rawText) || /^(vla|va)\.?$/i.test(abbrev)) {
-            return { patchId: 'viola', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(violin|violins|violino|violini|violine|violinen|violon|violons|viool|fiddle)\b/.test(rawText) || /^(vln|vl)\.?\s*[1234i]*$/i.test(abbrev)) {
-            return { patchId: 'violin', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(harp|arpa|harfe|harpe)\b/.test(rawText)) {
-            return { patchId: 'harp', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(guitar|chitarra|gitarre|guitare|gitaar|lute|liuto|laute|theorbo|mandolin)\b/.test(rawText)) {
-            return { patchId: 'guitar-nylon', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(strings|string\s*orchestra|archi|streicher|cordes|strijkers)\b/.test(rawText)) {
-            return { patchId: 'strings', isVocal: false, roleTag: 'Score' };
-        }
-
-        // Keyboards & Continuo
-        if (/\b(harpsichord|cembalo|clavicembalo|clavecin|klavecimbel|virginal|spinet|continuo|basso\s*continuo)\b/.test(rawText) || /^(cemb|b\.?c\.?)$/i.test(abbrev)) {
-            return { patchId: 'harpsichord', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(harmonium|reed\s*organ|accordion|akkordeon|bandoneon)\b/.test(rawText)) {
-            return { patchId: 'harmonium', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(organ|organo|orgel|orgue|pipe\s*organ|positif)\b/.test(rawText) || /^org\.?$/i.test(abbrev)) {
-            return { patchId: 'organ', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(piano|pianoforte|klavier|fortepiano)\b/.test(rawText) || /^(pno|pf)\.?$/i.test(abbrev)) {
-            return { patchId: 'piano', isVocal: false, roleTag: 'Score' };
-        }
-
-        // Percussion & Mallets
-        if (/\b(timpani|pauken|timbales)\b/.test(rawText) || /^timp\.?$/i.test(abbrev)) {
-            return { patchId: 'timpani', isVocal: false, roleTag: 'Score' };
-        }
-        if (/\b(xylophone|marimba|glockenspiel|vibraphone|celesta|campanelli|chimes|tubular\s*bells)\b/.test(rawText)) {
-            return { patchId: 'xylophone', isVocal: false, roleTag: 'Score' };
-        }
-
-        // --------------------------------------------------
-        // 4. GENERAL MIDI PROGRAM FALLBACK (1..128)
-        // --------------------------------------------------
-        if (gmProg1 !== null && gmProg1 >= 1 && gmProg1 <= 128) {
-            if (gmProg1 >= 53 && gmProg1 <= 55) return { patchId: 'piano', isVocal: true, roleTag: 'Vocal → Piano' };
-            if (gmProg1 >= 1 && gmProg1 <= 6) return { patchId: 'piano', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 7 && gmProg1 <= 8) return { patchId: 'harpsichord', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 9 && gmProg1 <= 16) return { patchId: 'xylophone', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 17 && gmProg1 <= 21) return { patchId: 'organ', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 22 && gmProg1 <= 24) return { patchId: 'harmonium', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 25 && gmProg1 <= 32) return { patchId: 'guitar-nylon', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 33 && gmProg1 <= 40) return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 41) return { patchId: 'violin', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 42) return { patchId: 'viola', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 43) return { patchId: 'cello', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 44) return { patchId: 'contrabass', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 47) return { patchId: 'harp', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 48) return { patchId: 'timpani', isVocal: false, roleTag: 'Score' };
-            if ((gmProg1 >= 45 && gmProg1 <= 46) || (gmProg1 >= 49 && gmProg1 <= 52)) {
-                return { patchId: 'strings', isVocal: false, roleTag: 'Score' };
-            }
-            if (gmProg1 === 57 || gmProg1 === 60) return { patchId: 'trumpet', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 58) return { patchId: 'trombone', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 59) return { patchId: 'tuba', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 61 && gmProg1 <= 64) return { patchId: 'french-horn', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 65 && gmProg1 <= 68) return { patchId: 'saxophone', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 69) return { patchId: 'oboe', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 70) return { patchId: 'english-horn', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 71) return { patchId: 'bassoon', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 72) return { patchId: 'clarinet', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 === 73) return { patchId: 'piccolo', isVocal: false, roleTag: 'Score' };
-            if (gmProg1 >= 74 && gmProg1 <= 80) return { patchId: 'flute', isVocal: false, roleTag: 'Score' };
+            return { patchId: 'piano', isVocal: true, roleTag: 'Vocal' };
         }
 
         // Default to Grand Piano
@@ -1022,6 +440,27 @@
     // AUDIO ENGINE & MULTI-SAMPLE LOADER
     // ===========================================
 
+    /**
+     * Converts a 0–100% UI slider value to a perceptual (logarithmic/power) audio gain multiplier.
+     * Human hearing is logarithmic (dB): a linear 0.5 vs 1.0 is only -6 dB, which sounds barely softer
+     * when multiple accompaniment parts sum together. Using an exponent of 2.4 with a +2.6 dB presence
+     * headroom at 100% yields:
+     *   - 100% -> gain 1.35 (+2.6 dB foreground presence boost)
+     *   -  80% -> gain 0.79 (-2.0 dB standard balanced ensemble level)
+     *   -  50% -> gain 0.255 (-11.9 dB, i.e. ~14.5 dB below 100% so the highlighted part stands out clearly!)
+     */
+    function volumePercentToGain(pct) {
+        const clamped = Math.max(0, Math.min(100, Number(pct) || 0));
+        if (clamped <= 0) return 0;
+        return 1.35 * Math.pow(clamped / 100, 2.4);
+    }
+
+    function masterVolumeToGain(pct) {
+        const clamped = Math.max(0, Math.min(100, Number(pct) || 0));
+        if (clamped <= 0) return 0;
+        return Math.pow(clamped / 100, 1.8);
+    }
+
     function ensureMasterAudioChain() {
         if (state.masterGain) return;
         state.masterLimiter = new Tone.Limiter(-1).toDestination();
@@ -1035,12 +474,12 @@
     }
 
     /**
-     * Loads and caches the ToneAudioBuffers for a classical instrument patch on demand.
+     * Loads and caches the ToneAudioBuffers for an instrument patch on demand.
      * Multiple parts sharing the same patch reuse the single cached buffer set.
      */
     async function loadInstrumentBuffersOnce(patchId) {
         const def = INSTRUMENT_CATALOG[patchId] || INSTRUMENT_CATALOG.piano;
-        if (!def.urls) return null; // Synth-only instrument (e.g. timpani)
+        if (!def.urls) return null; // Synth-only instrument (e.g. wave)
         if (state.instrumentBuffers[patchId]) return state.instrumentBuffers[patchId];
         if (state.instrumentFailed[patchId]) return null;
         if (state.instrumentLoadPromises[patchId]) return state.instrumentLoadPromises[patchId];
@@ -1087,57 +526,26 @@
 
     function createFallbackSynth(synthFamily, destinationNode) {
         switch (synthFamily) {
-            case 'timpani':
-                return new Tone.PolySynth(Tone.MembraneSynth, {
-                    maxPolyphony: 8,
-                    pitchDecay: 0.015,
-                    octaves: 1.4,
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 0.004, decay: 0.65, sustain: 0.05, release: 0.5 },
-                    volume: -4,
-                }).connect(destinationNode);
-            case 'strings':
+            case 'wave':
+                // Smooth, pitch-pure vocal rehearsal wave:
+                // Fundamental-rich custom harmonic wave (clear down into the Bass register on small speakers,
+                // silky-smooth in the Soprano register, zero vibrato/detuning so intonation is crystal clear,
+                // and full singing sustain so the exact note duration is heard)
                 return new Tone.PolySynth(Tone.Synth, {
-                    maxPolyphony: 16,
-                    oscillator: { type: 'fatsawtooth', count: 3, spread: 16 },
-                    envelope: { attack: 0.055, decay: 0.15, sustain: 0.82, release: 0.38 },
-                    volume: -10,
+                    maxPolyphony: 24,
+                    oscillator: {
+                        type: 'custom',
+                        partials: [1, 0.42, 0.18, 0.07, 0.03],
+                    },
+                    envelope: {
+                        attack: 0.018,
+                        decay: 0.08,
+                        sustain: 0.92,
+                        release: 0.14,
+                    },
+                    volume: -5,
                 }).connect(destinationNode);
-            case 'woodwind':
-                return new Tone.PolySynth(Tone.Synth, {
-                    maxPolyphony: 12,
-                    oscillator: { type: 'triangle2' },
-                    envelope: { attack: 0.03, decay: 0.1, sustain: 0.85, release: 0.25 },
-                    volume: -7,
-                }).connect(destinationNode);
-            case 'reed':
-                return new Tone.PolySynth(Tone.Synth, {
-                    maxPolyphony: 12,
-                    oscillator: { type: 'pulse', width: 0.35 },
-                    envelope: { attack: 0.025, decay: 0.12, sustain: 0.8, release: 0.24 },
-                    volume: -11,
-                }).connect(destinationNode);
-            case 'brass':
-                return new Tone.PolySynth(Tone.Synth, {
-                    maxPolyphony: 12,
-                    oscillator: { type: 'sawtooth4' },
-                    envelope: { attack: 0.03, decay: 0.14, sustain: 0.82, release: 0.28 },
-                    volume: -9,
-                }).connect(destinationNode);
-            case 'organ':
-                return new Tone.PolySynth(Tone.Synth, {
-                    maxPolyphony: 16,
-                    oscillator: { type: 'sine2' },
-                    envelope: { attack: 0.035, decay: 0.1, sustain: 0.88, release: 0.22 },
-                    volume: -8,
-                }).connect(destinationNode);
-            case 'plucked':
-                return new Tone.PolySynth(Tone.Synth, {
-                    maxPolyphony: 16,
-                    oscillator: { type: 'sawtooth6' },
-                    envelope: { attack: 0.004, decay: 0.38, sustain: 0.08, release: 0.25 },
-                    volume: -9,
-                }).connect(destinationNode);
+
             case 'piano':
             default:
                 return new Tone.PolySynth(Tone.Synth, {
@@ -1182,7 +590,7 @@
         ensureMasterAudioChain();
 
         if (!part.gainNode) {
-            part.gainNode = new Tone.Gain((part.volume ?? CONFIG.DEFAULT_PART_VOLUME) / 100).connect(state.masterGain);
+            part.gainNode = new Tone.Gain(volumePercentToGain(part.volume ?? CONFIG.DEFAULT_PART_VOLUME)).connect(state.masterGain);
         }
 
         disposeSinglePartInstrument(part);
@@ -1274,7 +682,7 @@
     }
 
     function applyMasterVolume() {
-        const gainVal = state.masterMuted ? 0 : (state.masterVolume / 100);
+        const gainVal = state.masterMuted ? 0 : masterVolumeToGain(state.masterVolume);
         if (state.masterGain) {
             state.masterGain.gain.rampTo(gainVal, 0.02);
         }
@@ -1296,7 +704,7 @@
         const anySoloed = partList.some((p) => p.soloed);
 
         for (const part of partList) {
-            let effective = part.volume / 100;
+            let effective = volumePercentToGain(part.volume);
             if (part.muted || (anySoloed && !part.soloed)) {
                 effective = 0;
             }
@@ -1416,8 +824,8 @@
         releaseAllInstruments();
 
         // Ensure the clicked note is audible even if the user muted this part in the mixer
-        if (part.gainNode && part.gainNode.gain.value < 0.1) {
-            const auditionGain = Math.max(0.75, (part.volume || CONFIG.DEFAULT_PART_VOLUME) / 100);
+        if (part.gainNode && part.gainNode.gain.value < 0.15) {
+            const auditionGain = Math.max(0.8, volumePercentToGain(part.volume || CONFIG.DEFAULT_PART_VOLUME));
             part.gainNode.gain.setValueAtTime(auditionGain, Tone.now());
         }
 
@@ -1496,8 +904,14 @@
             const durFactor = def.durationFactor ?? 0.95;
             const durationSec = Math.max(0.05, ev.durationWhole * secPerWhole * durFactor);
 
+            // Enhance articulation contrast when a part is highlighted ('H')
+            const anyHighlighted = Object.values(state.parts).some((p) => p.highlighted);
+            const noteVel = part.highlighted
+                ? Math.min(1, ev.velocity * 1.15)
+                : (anyHighlighted ? ev.velocity * 0.72 : ev.velocity);
+
             try {
-                part.instrument.triggerAttackRelease(freqHz, durationSec, audioTime, ev.velocity);
+                part.instrument.triggerAttackRelease(freqHz, durationSec, audioTime, noteVel);
             } catch (err) {
                 console.warn('[PYP] Note trigger error:', err);
             }
@@ -1575,203 +989,139 @@
      * - 1-to-1 `cursorSteps` array with exact pixel coordinates (x, y, height)
      * - `notes` array (with tied notes properly merged)
      * - `barData` & `metronomeBeats`
-     * - `parts` map (preserving existing mixer settings when re-rendering on zoom/view toggle!)
+     * - `parts` map (preserving existing mixer settings when re-rendering on zoom/view/hide toggle!)
+     *
+     * PERFORMANCE: Suppresses `osmd.cursor.update()` during traversal and computes coordinates directly
+     * from OSMD's in-memory GraphicSheet (`MeasureList` + `GNotesUnderCursor`), eliminating ratusan/thousands
+     * of synchronous `<canvas>.toDataURL()` calls and DOM layout reflows (>200x faster).
      */
     function extractScoreData(preserveMixerSettings = false) {
         const osmd = state.osmd;
         if (!osmd || !osmd.sheet || !osmd.cursor) return;
 
         state.ticksPerWhole = getTicksPerWhole();
+        const canFastRebuild = Boolean(
+            preserveMixerSettings &&
+            state.barData.length > 0 &&
+            state.allScoreNotes.length > 0 &&
+            Object.keys(state.parts).length > 0
+        );
+
         const prevParts = preserveMixerSettings ? { ...state.parts } : {};
         if (!preserveMixerSettings) {
             disposePartAudioNodes();
         }
 
-        const nextParts = {};
+        const nextParts = canFastRebuild ? state.parts : {};
         const notes = [];
         const cursorSteps = [];
 
-        // Extract title / composer for header chip
-        const title = osmd.sheet.TitleString || osmd.sheet.Title?.text || '';
-        const composer = osmd.sheet.ComposerString || osmd.sheet.Composer?.text || '';
-        state.scoreTitle = title
-            ? (composer ? `${title} — ${composer}` : title)
-            : (state.scoreTitle || 'Untitled Score');
-        updateScoreTitleUI();
+        if (!canFastRebuild) {
+            // Extract title / composer for header chip
+            const title = osmd.sheet.TitleString || osmd.sheet.Title?.text || '';
+            const composer = osmd.sheet.ComposerString || osmd.sheet.Composer?.text || '';
+            state.scoreTitle = title
+                ? (composer ? `${title} — ${composer}` : title)
+                : (state.scoreTitle || 'Untitled Score');
+            updateScoreTitleUI();
 
-        // Extract base tempo
-        state.baseScoreBpm = osmd.sheet.DefaultStartTempoInBpm || CONFIG.DEFAULT_BPM;
-        state.activeBarBaseBpm = state.baseScoreBpm;
-
-        // Extract Bar / Measure Data + Metronome Beats
-        const barData = [];
-        const metronomeBeats = [];
-        const sourceMeasures = osmd.sheet.SourceMeasures || [];
-        let runningBpm = state.baseScoreBpm;
-
-        for (let i = 0; i < sourceMeasures.length; i++) {
-            const m = sourceMeasures[i];
-            if (m.TempoInBPM && m.TempoInBPM > 0) {
-                runningBpm = m.TempoInBPM;
-            }
-            const startWhole = m.AbsoluteTimestamp?.RealValue ?? 0;
-            const durWhole = m.Duration?.RealValue ?? 1;
-            const startTicks = realValueToTicks(startWhole);
-            const endTicks = realValueToTicks(startWhole + durWhole);
-
-            const ts = m.ActiveTimeSignature;
-            const numerator = ts?.Numerator || 4;
-            const denominator = ts?.Denominator || 4;
-
-            barData.push({
-                barNumber: m.MeasureNumber || (i + 1),
-                measureIndex: i,
-                startTicks,
-                endTicks,
-                numerator,
-                denominator,
-                bpm: runningBpm,
-            });
-
-            // Build beat ticks for metronome
-            const beatWhole = (numerator === 6 || numerator === 9 || numerator === 12) && denominator === 8
-                ? 3 / 8
-                : 1 / denominator;
-            const beatTicks = Math.max(1, Math.round(beatWhole * state.ticksPerWhole));
-            let beatPos = startTicks;
-            let beatIdx = 0;
-            while (beatPos < endTicks - 2) {
-                metronomeBeats.push({
-                    ticks: beatPos,
-                    isDownbeat: beatIdx === 0,
-                });
-                beatPos += beatTicks;
-                beatIdx++;
-                if (beatIdx > 32) break;
-            }
+            // Extract base tempo
+            state.baseScoreBpm = osmd.sheet.DefaultStartTempoInBpm || CONFIG.DEFAULT_BPM;
+            state.activeBarBaseBpm = state.baseScoreBpm;
         }
 
-        // Pre-register instruments from sheet so part order matches score order top-to-bottom
-        if (osmd.sheet.Instruments) {
-            const rawPartInfos = osmd.sheet.Instruments.map((inst, idx) => {
-                const partId = inst.IdString || `part_${inst.Id ?? idx}`;
-                const xmlMeta = state.rawXmlPartMeta[partId] || null;
-                const partName = (inst.Name || inst.NameLabel?.text || xmlMeta?.partName || `Part ${idx + 1}`).trim();
-                const subInst = inst.SubInstruments && inst.SubInstruments[0];
+        // Extract Bar / Measure Data + Metronome Beats (or reuse on visual-only re-render)
+        let barData = state.barData;
+        let metronomeBeats = state.metronomeBeats;
+        const sourceMeasures = osmd.sheet.SourceMeasures || [];
 
-                // Check if any voice in this instrument contains vocal lyrics
-                let hasLyrics = false;
-                try {
-                    if (Array.isArray(inst.Voices)) {
-                        for (const v of inst.Voices) {
-                            if (Array.isArray(v.VoiceEntries)) {
-                                for (const ve of v.VoiceEntries) {
-                                    if (ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)) {
-                                        hasLyrics = true;
-                                        break;
+        if (!canFastRebuild) {
+            barData = [];
+            metronomeBeats = [];
+            let runningBpm = state.baseScoreBpm;
+
+            for (let i = 0; i < sourceMeasures.length; i++) {
+                const m = sourceMeasures[i];
+                if (m.TempoInBPM && m.TempoInBPM > 0) {
+                    runningBpm = m.TempoInBPM;
+                }
+                const startWhole = m.AbsoluteTimestamp?.RealValue ?? 0;
+                const durWhole = m.Duration?.RealValue ?? 1;
+                const startTicks = realValueToTicks(startWhole);
+                const endTicks = realValueToTicks(startWhole + durWhole);
+
+                const ts = m.ActiveTimeSignature;
+                const numerator = ts?.Numerator || 4;
+                const denominator = ts?.Denominator || 4;
+
+                barData.push({
+                    barNumber: m.MeasureNumber || (i + 1),
+                    measureIndex: i,
+                    startTicks,
+                    endTicks,
+                    numerator,
+                    denominator,
+                    bpm: runningBpm,
+                });
+
+                // Build beat ticks for metronome
+                const beatWhole = (numerator === 6 || numerator === 9 || numerator === 12) && denominator === 8
+                    ? 3 / 8
+                    : 1 / denominator;
+                const beatTicks = Math.max(1, Math.round(beatWhole * state.ticksPerWhole));
+                let beatPos = startTicks;
+                let beatIdx = 0;
+                while (beatPos < endTicks - 2) {
+                    metronomeBeats.push({
+                        ticks: beatPos,
+                        isDownbeat: beatIdx === 0,
+                    });
+                    beatPos += beatTicks;
+                    beatIdx++;
+                    if (beatIdx > 32) break;
+                }
+            }
+
+            // Pre-register instruments from sheet so part order matches score order top-to-bottom
+            if (osmd.sheet.Instruments) {
+                const rawPartInfos = osmd.sheet.Instruments.map((inst, idx) => {
+                    const partId = inst.IdString || `part_${inst.Id ?? idx}`;
+                    const xmlMeta = state.rawXmlPartMeta[partId] || null;
+                    const partName = (inst.Name || inst.NameLabel?.text || xmlMeta?.partName || `Part ${idx + 1}`).trim();
+                    const subInst = inst.SubInstruments && inst.SubInstruments[0];
+
+                    let hasLyrics = false;
+                    try {
+                        if (Array.isArray(inst.Voices)) {
+                            for (const v of inst.Voices) {
+                                if (Array.isArray(v.VoiceEntries)) {
+                                    for (const ve of v.VoiceEntries) {
+                                        if (ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)) {
+                                            hasLyrics = true;
+                                            break;
+                                        }
                                     }
                                 }
+                                if (hasLyrics) break;
                             }
-                            if (hasLyrics) break;
                         }
-                    }
-                } catch (_) { /* ignore */ }
+                    } catch (_) { /* ignore */ }
 
-                return {
-                    partId,
-                    name: partName,
-                    xmlMeta,
-                    subInstrumentName: subInst?.name || '',
-                    midiInstrumentId: inst.MidiInstrumentId ?? subInst?.midiInstrumentID,
-                    hasLyrics,
-                };
-            });
-
-            rawPartInfos.forEach((pInfo) => {
-                const { partId, name: partName } = pInfo;
-                if (!nextParts[partId]) {
-                    const prev = prevParts[partId];
-                    const detected = detectPartInstrument(pInfo, rawPartInfos);
-                    const defaultPatch = (state.soundPreset !== 'auto' && INSTRUMENT_CATALOG[state.soundPreset])
-                        ? state.soundPreset
-                        : detected.patchId;
-
-                    nextParts[partId] = {
-                        id: partId,
+                    return {
+                        partId,
                         name: partName,
-                        volume: prev ? prev.volume : CONFIG.DEFAULT_PART_VOLUME,
-                        muted: prev ? prev.muted : false,
-                        soloed: prev ? prev.soloed : false,
-                        highlighted: prev ? Boolean(prev.highlighted) : false,
-                        patchId: prev ? prev.patchId : defaultPatch,
-                        detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
-                        isVocal: prev ? prev.isVocal : detected.isVocal,
-                        roleTag: prev ? prev.roleTag : detected.roleTag,
-                        isLoadingPatch: false,
-                        gainNode: prev ? prev.gainNode : null,
-                        filterNode: prev ? prev.filterNode : null,
-                        instrument: prev ? prev.instrument : null,
+                        xmlMeta,
+                        subInstrumentName: subInst?.name || '',
+                        midiInstrumentId: inst.MidiInstrumentId ?? subInst?.midiInstrumentID,
+                        hasLyrics,
                     };
-                }
-            });
-        }
+                });
 
-        // Walk OSMD cursor once to capture exact 1-to-1 step map & notes
-        osmd.cursor.show();
-        osmd.cursor.reset();
-        applyCursorStyle();
-
-        let stepIdx = 0;
-        let maxNoteEndTicks = 0;
-
-        while (!osmd.cursor.Iterator.EndReached && stepIdx < CONFIG.MAX_CURSOR_STEPS) {
-            const iter = osmd.cursor.Iterator;
-            const realValue = iter.currentTimeStamp?.RealValue ?? 0;
-            const ticks = realValueToTicks(realValue);
-            const measureIndex = iter.CurrentMeasureIndex ?? 0;
-            const coords = readCursorCoords();
-
-            // Capture graphical note SVG elements & sourceNote map at this cursor step
-            const svgNotes = [];
-            const gNoteBySource = new Map();
-            const clickableNotes = [];
-            try {
-                if (typeof osmd.cursor.GNotesUnderCursor === 'function') {
-                    const gNotes = osmd.cursor.GNotesUnderCursor();
-                    if (gNotes) {
-                        for (const gn of gNotes) {
-                            const svgEl = typeof gn.getSVGGElement === 'function' ? gn.getSVGGElement() : null;
-                            if (svgEl) {
-                                const gnInst = gn.sourceNote?.ParentVoiceEntry?.ParentVoice?.Parent;
-                                const gnPartId = gnInst ? (gnInst.IdString || `part_${gnInst.Id ?? 0}`) : 'part_0';
-                                svgEl.dataset.partId = gnPartId;
-                                svgNotes.push(svgEl);
-                            }
-                            if (gn && gn.sourceNote) {
-                                gNoteBySource.set(gn.sourceNote, { gn, svgEl });
-                            }
-                        }
-                    }
-                }
-            } catch (_) { /* optional highlight */ }
-
-            const voiceEntries = iter.CurrentVoiceEntries;
-            if (voiceEntries) {
-                for (const ve of voiceEntries) {
-                    const inst = ve.ParentVoice?.Parent;
-                    const partId = inst ? (inst.IdString || `part_${inst.Id ?? 0}`) : 'part_0';
-                    const partName = inst ? (inst.Name || inst.NameLabel?.text || `Part ${(inst.Id ?? 0) + 1}`).trim() : 'Part 1';
-
+                rawPartInfos.forEach((pInfo) => {
+                    const { partId, name: partName } = pInfo;
                     if (!nextParts[partId]) {
                         const prev = prevParts[partId];
-                        const detected = detectPartInstrument({
-                            partId,
-                            name: partName,
-                            xmlMeta: state.rawXmlPartMeta[partId] || null,
-                            subInstrumentName: inst?.SubInstruments?.[0]?.name || '',
-                            midiInstrumentId: inst?.MidiInstrumentId,
-                            hasLyrics: Boolean(ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)),
-                        });
+                        const detected = detectPartInstrument(pInfo, rawPartInfos);
                         const defaultPatch = (state.soundPreset !== 'auto' && INSTRUMENT_CATALOG[state.soundPreset])
                             ? state.soundPreset
                             : detected.patchId;
@@ -1783,6 +1133,7 @@
                             muted: prev ? prev.muted : false,
                             soloed: prev ? prev.soloed : false,
                             highlighted: prev ? Boolean(prev.highlighted) : false,
+                            hidden: prev ? Boolean(prev.hidden) : false,
                             patchId: prev ? prev.patchId : defaultPatch,
                             detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
                             isVocal: prev ? prev.isVocal : detected.isVocal,
@@ -1793,120 +1144,350 @@
                             instrument: prev ? prev.instrument : null,
                         };
                     }
+                });
+            }
+        }
 
-                    for (const note of ve.Notes) {
-                        if (note.isRest() || !note.Pitch || note.isGrace) continue;
+        // Precompute in-memory pixel bounds for each measure column from GraphicSheet.MeasureList,
+        // grouping compactified multi-measure rests so absorbed bars interpolate smoothly across the visible multi-rest bar.
+        const unitToPx = 10 * state.zoom;
+        const mList = osmd.GraphicSheet?.MeasureList || [];
+        const measureBounds = new Array(mList.length);
 
-                        const writtenDurationWhole = note.Length?.RealValue ?? 0;
-                        if (writtenDurationWhole <= 0.0005) continue;
+        for (let mIdx = 0; mIdx < mList.length; mIdx++) {
+            const col = mList[mIdx];
+            let minY = Infinity;
+            let maxY = -Infinity;
+            let minX = 0;
+            let width = 0;
+            let hasRenderedMeasure = false;
+            let multiRestCount = osmd.sheet?.SourceMeasures?.[mIdx]?.multipleRestMeasures || 0;
 
-                        const midi = extractMidiNote(note);
-                        if (midi === null) continue;
+            if (Array.isArray(col)) {
+                for (let sIdx = 0; sIdx < col.length; sIdx++) {
+                    const gm = col[sIdx];
+                    if (!gm || gm.isReducedToMultiRest) continue;
+                    const pos = gm.PositionAndShape?.AbsolutePosition;
+                    const size = gm.PositionAndShape?.Size;
+                    if (!pos || !size || !(size.width > 0.01)) continue;
+                    if (mIdx > 0 && pos.x <= 0.01) continue;
 
-                        // Record every visible pitched notehead (including tied continuations) for click selection & auditioning
-                        const gEntry = gNoteBySource.get(note);
-                        const pos = gEntry?.gn?.PositionAndShape?.AbsolutePosition;
-                        const noteX = (pos && typeof pos.x === 'number') ? (pos.x * 10 * state.zoom) : (coords.x + 6 * state.zoom);
-                        const noteY = (pos && typeof pos.y === 'number') ? (pos.y * 10 * state.zoom) : null;
-
-                        clickableNotes.push({
-                            stepIdx,
-                            ticks,
-                            midi,
-                            durationWhole: writtenDurationWhole,
-                            partId,
-                            svgEl: gEntry?.svgEl || null,
-                            noteX,
-                            noteY,
-                        });
-
-                        // For scheduled playback: skip tied continuation notes and sum full tied duration on the start note
-                        let durationWhole = writtenDurationWhole;
-                        if (note.NoteTie) {
-                            if (note.NoteTie.StartNote !== note) {
-                                continue;
-                            }
-                            if (Array.isArray(note.NoteTie.Notes) && note.NoteTie.Notes.length > 0) {
-                                durationWhole = note.NoteTie.Notes.reduce(
-                                    (sum, tn) => sum + (tn.Length?.RealValue ?? 0),
-                                    0
-                                );
-                            }
-                        }
-
-                        const noteEndTicks = ticks + realValueToTicks(durationWhole);
-                        if (noteEndTicks > maxNoteEndTicks) {
-                            maxNoteEndTicks = noteEndTicks;
-                        }
-
-                        notes.push({
-                            ticks,
-                            durationWhole,
-                            midi,
-                            partId,
-                            velocity: 0.85,
-                            stepIdx,
-                        });
+                    if (!hasRenderedMeasure) {
+                        minX = pos.x;
+                        width = size.width;
+                        hasRenderedMeasure = true;
+                    } else {
+                        minX = Math.min(minX, pos.x);
+                        width = Math.max(width, size.width);
                     }
+                    if (gm.multipleRestMeasures > multiRestCount) {
+                        multiRestCount = gm.multipleRestMeasures;
+                    }
+                    if (pos.y < minY) minY = pos.y;
+                    const bot = pos.y + (size.height > 0 ? size.height : 4.0);
+                    if (bot > maxY) maxY = bot;
                 }
             }
 
-            const hitX = clickableNotes.length > 0
-                ? (clickableNotes.reduce((sum, cn) => sum + cn.noteX, 0) / clickableNotes.length)
-                : (coords.x + 6 * state.zoom);
+            const bar = barData[mIdx];
+            const barStart = bar ? bar.startTicks : 0;
+            const barEnd = bar ? bar.endTicks : (barStart + state.ticksPerWhole);
 
-            cursorSteps.push({
-                stepIdx,
-                ticks,
-                realValue,
-                measureIndex,
-                x: coords.x,
-                hitX,
-                y: coords.y,
-                height: coords.height,
-                svgNotes,
-                clickableNotes,
-            });
-
-            osmd.cursor.next();
-            stepIdx++;
+            if (!hasRenderedMeasure) {
+                measureBounds[mIdx] = {
+                    isReduced: true,
+                    isMultiRest: true,
+                    xPx: 0,
+                    widthPx: 0,
+                    yPx: 0,
+                    heightPx: 60,
+                    spanStartTicks: barStart,
+                    spanEndTicks: barEnd,
+                };
+            } else {
+                measureBounds[mIdx] = {
+                    isReduced: false,
+                    isMultiRest: multiRestCount > 1,
+                    xPx: minX * unitToPx,
+                    widthPx: width * unitToPx,
+                    yPx: Math.max(0, (minY - 1.0) * unitToPx),
+                    heightPx: Math.max(40, (maxY - minY + 2.0) * unitToPx),
+                    spanStartTicks: barStart,
+                    spanEndTicks: barEnd,
+                };
+            }
         }
 
-        // Compute total playable duration in ticks
-        const lastBarEnd = barData.length ? barData[barData.length - 1].endTicks : 0;
-        const lastStepTick = cursorSteps.length ? cursorSteps[cursorSteps.length - 1].ticks : 0;
-        state.totalMusicalTicks = Math.max(lastBarEnd, maxNoteEndTicks, lastStepTick, 1);
+        // Link absorbed multi-measure rest bars to their visible multi-measure rest head bar
+        for (let mIdx = 0; mIdx < measureBounds.length; mIdx++) {
+            const head = measureBounds[mIdx];
+            if (!head || head.isReduced) continue;
+
+            let endIdx = mIdx;
+            while (endIdx + 1 < measureBounds.length && measureBounds[endIdx + 1]?.isReduced) {
+                endIdx++;
+            }
+
+            if (endIdx > mIdx) {
+                const spanStart = barData[mIdx]?.startTicks ?? head.spanStartTicks;
+                const spanEnd = barData[endIdx]?.endTicks ?? head.spanEndTicks;
+                head.isMultiRest = true;
+                head.spanStartTicks = spanStart;
+                head.spanEndTicks = spanEnd;
+
+                for (let k = mIdx + 1; k <= endIdx; k++) {
+                    measureBounds[k] = {
+                        isReduced: true,
+                        isMultiRest: true,
+                        xPx: head.xPx,
+                        widthPx: head.widthPx,
+                        yPx: head.yPx,
+                        heightPx: head.heightPx,
+                        spanStartTicks: spanStart,
+                        spanEndTicks: spanEnd,
+                    };
+                }
+                mIdx = endIdx;
+            }
+        }
+
+        // Walk OSMD cursor once with cursor.update() suppressed (zero DOM reflows / canvas.toDataURL calls during walk!)
+        osmd.cursor.show();
+        const origCursorUpdate = osmd.cursor.update;
+        osmd.cursor.update = () => { };
+
+        let stepIdx = 0;
+        let maxNoteEndTicks = 0;
+
+        try {
+            osmd.cursor.reset();
+
+            while (!osmd.cursor.Iterator.EndReached && stepIdx < CONFIG.MAX_CURSOR_STEPS) {
+                const iter = osmd.cursor.Iterator;
+                const realValue = iter.currentTimeStamp?.RealValue ?? 0;
+                const ticks = realValueToTicks(realValue);
+                const measureIndex = iter.CurrentMeasureIndex ?? 0;
+                const mBounds = measureBounds[measureIndex] || {
+                    isReduced: false,
+                    isMultiRest: false,
+                    xPx: 0,
+                    widthPx: 100,
+                    yPx: 0,
+                    heightPx: 60,
+                    spanStartTicks: 0,
+                    spanEndTicks: state.ticksPerWhole,
+                };
+
+                const svgNotes = [];
+                const gNoteBySource = new Map();
+                const clickableNotes = [];
+                let firstGNoteXUnits = null;
+
+                try {
+                    if (typeof osmd.cursor.GNotesUnderCursor === 'function') {
+                        const gNotes = osmd.cursor.GNotesUnderCursor();
+                        if (gNotes) {
+                            for (const gn of gNotes) {
+                                const gnInst = gn?.sourceNote?.ParentVoiceEntry?.ParentVoice?.Parent;
+                                const isInstVisible = !gnInst || gnInst.Visible !== false;
+                                const svgEl = typeof gn.getSVGGElement === 'function' ? gn.getSVGGElement() : null;
+                                const gnPos = gn?.PositionAndShape?.AbsolutePosition;
+
+                                // Only use graphical note X if it belongs to a visible part and is actually rendered inside this measure
+                                if (
+                                    !mBounds.isMultiRest &&
+                                    isInstVisible &&
+                                    svgEl &&
+                                    gnPos &&
+                                    typeof gnPos.x === 'number' &&
+                                    gnPos.x > 0.01 &&
+                                    (gnPos.x * unitToPx) >= (mBounds.xPx - 6) &&
+                                    firstGNoteXUnits === null
+                                ) {
+                                    firstGNoteXUnits = gnPos.x;
+                                }
+
+                                if (svgEl && isInstVisible) {
+                                    const gnPartId = gnInst ? (gnInst.IdString || `part_${gnInst.Id ?? 0}`) : 'part_0';
+                                    svgEl.dataset.partId = gnPartId;
+                                    svgNotes.push(svgEl);
+                                }
+                                if (gn && gn.sourceNote && isInstVisible) {
+                                    gNoteBySource.set(gn.sourceNote, { gn, svgEl });
+                                }
+                            }
+                        }
+                    }
+                } catch (_) { /* optional highlight */ }
+
+                // Compute exact cursor X in memory:
+                // - When visible notes exist at this step: align with the rendered notehead
+                // - When inside a compactified multi-measure rest or a bar where only hidden parts have notes:
+                //   glide smoothly across the visible bar / multi-rest bar proportional to musical time
+                let stepX = mBounds.xPx;
+                if (firstGNoteXUnits !== null) {
+                    stepX = (firstGNoteXUnits - 0.45) * unitToPx;
+                } else {
+                    const spanStart = mBounds.spanStartTicks;
+                    const spanEnd = mBounds.spanEndTicks;
+                    if (spanEnd > spanStart) {
+                        const frac = Math.max(0, Math.min(1, (ticks - spanStart) / (spanEnd - spanStart)));
+                        const insetLeft = Math.min(mBounds.widthPx * 0.12, 14 * state.zoom);
+                        const usableW = Math.max(4, mBounds.widthPx - insetLeft - 4 * state.zoom);
+                        stepX = mBounds.xPx + insetLeft + usableW * frac;
+                    }
+                }
+
+                const voiceEntries = iter.CurrentVoiceEntries;
+                if (voiceEntries) {
+                    for (const ve of voiceEntries) {
+                        const inst = ve.ParentVoice?.Parent;
+                        const partId = inst ? (inst.IdString || `part_${inst.Id ?? 0}`) : 'part_0';
+                        const partName = inst ? (inst.Name || inst.NameLabel?.text || `Part ${(inst.Id ?? 0) + 1}`).trim() : 'Part 1';
+
+                        if (!canFastRebuild && !nextParts[partId]) {
+                            const prev = prevParts[partId];
+                            const detected = detectPartInstrument({
+                                partId,
+                                name: partName,
+                                xmlMeta: state.rawXmlPartMeta[partId] || null,
+                                subInstrumentName: inst?.SubInstruments?.[0]?.name || '',
+                                midiInstrumentId: inst?.MidiInstrumentId,
+                                hasLyrics: Boolean(ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)),
+                            });
+                            const defaultPatch = (state.soundPreset !== 'auto' && INSTRUMENT_CATALOG[state.soundPreset])
+                                ? state.soundPreset
+                                : detected.patchId;
+
+                            nextParts[partId] = {
+                                id: partId,
+                                name: partName,
+                                volume: prev ? prev.volume : CONFIG.DEFAULT_PART_VOLUME,
+                                muted: prev ? prev.muted : false,
+                                soloed: prev ? prev.soloed : false,
+                                highlighted: prev ? Boolean(prev.highlighted) : false,
+                                hidden: prev ? Boolean(prev.hidden) : false,
+                                patchId: prev ? prev.patchId : defaultPatch,
+                                detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
+                                isVocal: prev ? prev.isVocal : detected.isVocal,
+                                roleTag: prev ? prev.roleTag : detected.roleTag,
+                                isLoadingPatch: false,
+                                gainNode: prev ? prev.gainNode : null,
+                                filterNode: prev ? prev.filterNode : null,
+                                instrument: prev ? prev.instrument : null,
+                            };
+                        }
+
+                        for (const note of ve.Notes) {
+                            if (note.isRest() || !note.Pitch || note.isGrace) continue;
+
+                            const writtenDurationWhole = note.Length?.RealValue ?? 0;
+                            if (writtenDurationWhole <= 0.0005) continue;
+
+                            const midi = extractMidiNote(note);
+                            if (midi === null) continue;
+
+                            const gEntry = gNoteBySource.get(note);
+                            const pos = gEntry?.gn?.PositionAndShape?.AbsolutePosition;
+                            const noteX = (pos && typeof pos.x === 'number') ? (pos.x * unitToPx) : (stepX + 6 * state.zoom);
+                            const noteY = (pos && typeof pos.y === 'number') ? (pos.y * unitToPx) : null;
+
+                            clickableNotes.push({
+                                stepIdx,
+                                ticks,
+                                midi,
+                                durationWhole: writtenDurationWhole,
+                                partId,
+                                svgEl: gEntry?.svgEl || null,
+                                noteX,
+                                noteY,
+                            });
+
+                            if (!canFastRebuild) {
+                                let durationWhole = writtenDurationWhole;
+                                if (note.NoteTie) {
+                                    if (note.NoteTie.StartNote !== note) {
+                                        continue;
+                                    }
+                                    if (Array.isArray(note.NoteTie.Notes) && note.NoteTie.Notes.length > 0) {
+                                        durationWhole = note.NoteTie.Notes.reduce(
+                                            (sum, tn) => sum + (tn.Length?.RealValue ?? 0),
+                                            0
+                                        );
+                                    }
+                                }
+
+                                const noteEndTicks = ticks + realValueToTicks(durationWhole);
+                                if (noteEndTicks > maxNoteEndTicks) {
+                                    maxNoteEndTicks = noteEndTicks;
+                                }
+
+                                notes.push({
+                                    ticks,
+                                    durationWhole,
+                                    midi,
+                                    partId,
+                                    velocity: 0.85,
+                                    stepIdx,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                const hitX = clickableNotes.length > 0
+                    ? (clickableNotes.reduce((sum, cn) => sum + cn.noteX, 0) / clickableNotes.length)
+                    : (stepX + 6 * state.zoom);
+
+                cursorSteps.push({
+                    stepIdx,
+                    ticks,
+                    realValue,
+                    measureIndex,
+                    x: stepX,
+                    hitX,
+                    y: mBounds.yPx,
+                    height: mBounds.heightPx,
+                    svgNotes,
+                    clickableNotes,
+                });
+
+                osmd.cursor.next();
+                stepIdx++;
+            }
+
+            osmd.cursor.reset();
+        } finally {
+            osmd.cursor.update = origCursorUpdate;
+        }
+
+        // Update cursor DOM once after silent traversal
+        applyCursorStyle();
+        state.currentStepIndex = 0;
+
+        if (!canFastRebuild) {
+            const lastBarEnd = barData.length ? barData[barData.length - 1].endTicks : 0;
+            const lastStepTick = cursorSteps.length ? cursorSteps[cursorSteps.length - 1].ticks : 0;
+            state.totalMusicalTicks = Math.max(lastBarEnd, maxNoteEndTicks, lastStepTick, 1);
+            state.parts = nextParts;
+            state.allScoreNotes = notes;
+            state.notes = state.allScoreNotes;
+            state.barData = barData;
+            state.metronomeBeats = metronomeBeats;
+        }
 
         // Compute horizontal end X of final barline for smooth continuous panning through the last measure
         const lastStepX = cursorSteps.length ? cursorSteps[cursorSteps.length - 1].x : 0;
         let scoreEndX = lastStepX + 60;
-        try {
-            const mList = osmd.GraphicSheet?.MeasureList;
-            if (Array.isArray(mList) && mList.length > 0) {
-                const lastCol = mList[mList.length - 1];
-                const gm = Array.isArray(lastCol) ? lastCol[0] : null;
-                if (gm && gm.PositionAndShape) {
-                    const rightUnits = (gm.PositionAndShape.AbsolutePosition?.x ?? 0) + (gm.PositionAndShape.Size?.width ?? 0);
-                    const rightPx = rightUnits * 10 * state.zoom;
-                    if (rightPx > lastStepX) {
-                        scoreEndX = rightPx;
-                    }
-                }
+        if (measureBounds.length > 0) {
+            const lastMB = measureBounds[measureBounds.length - 1];
+            const rightPx = lastMB.xPx + lastMB.widthPx;
+            if (rightPx > lastStepX) {
+                scoreEndX = rightPx;
             }
-        } catch (_) { /* fallback used */ }
+        }
         state.scoreEndX = scoreEndX;
-
-        state.parts = nextParts;
-        state.notes = notes;
         state.cursorSteps = cursorSteps;
-        state.barData = barData;
-        state.metronomeBeats = metronomeBeats;
-
-        // Reset cursor back to step 0 (very beginning of score) cleanly
-        osmd.cursor.reset();
-        osmd.cursor.show();
-        applyCursorStyle();
-        state.currentStepIndex = 0;
 
         if (!preserveMixerSettings) {
             state.currentTicks = 0;
@@ -1918,20 +1499,24 @@
             }
         }
 
-        // Apply 50% horizontal padding in Continuous View and position camera at start
+        // Apply 50% horizontal padding in Continuous View
         updateContinuousHorizontalPadding(false);
         if (!preserveMixerSettings) {
             updateCameraForTicks(0, 0, true);
         }
 
-        // Rebuild UI elements
-        updateTempoReadoutUI();
-        setupTimelineUI();
+        // Rebuild UI elements (skip full timeline bar tick DOM rebuild on visual-only re-renders)
+        if (!canFastRebuild) {
+            updateTempoReadoutUI();
+            setupTimelineUI();
+        }
         renderPartMixerUI();
+        syncGlobalSoundSelectUI();
         renderStaffHighlights();
+        renderStaffBarNumbers();
 
-        // Schedule audio parts if audio already started
-        if (state.audioInitialized) {
+        // Schedule audio parts only on initial score load (never interrupt active playback on visual re-render!)
+        if (state.audioInitialized && !canFastRebuild) {
             if (!preserveMixerSettings) {
                 loadAndBuildAllPartInstruments();
             }
@@ -1939,35 +1524,54 @@
         }
     }
 
+    function syncOsmdInstrumentVisibility() {
+        if (!state.osmd || !state.osmd.sheet || !Array.isArray(state.osmd.sheet.Instruments)) return;
+        state.osmd.sheet.Instruments.forEach((inst, idx) => {
+            const pid = inst.IdString || `part_${inst.Id ?? idx}`;
+            const partObj = state.parts[pid];
+            if (partObj) {
+                inst.Visible = !partObj.hidden;
+            }
+        });
+    }
+
     /**
-     * Rebuilds only the visual cursor coordinates after zoom or view mode re-render,
-     * preserving exact musical position and playing state.
+     * Rebuilds only the visual score & cursor coordinates after zoom, view mode, or part visibility re-render,
+     * keeping Tone.Transport running 100% uninterrupted during active playback!
      */
     function reRenderScorePreservingState() {
         if (!state.osmd || !state.scoreLoaded) return;
 
-        const wasPlaying = state.isPlaying;
-        const savedTicks = state.isPlaying ? Tone.Transport.ticks : state.currentTicks;
-        if (wasPlaying) {
-            pausePlayback(false);
-        }
-
+        clearAllNoteHighlights();
         updateContinuousHorizontalPadding(true);
+        syncOsmdInstrumentVisibility();
 
         state.osmd.setOptions({
             renderSingleHorizontalStaffline: state.continuousScrollMode,
         });
+        if (state.osmd.EngravingRules) {
+            state.osmd.EngravingRules.RenderMeasureNumbers = false;
+        }
         state.osmd.zoom = state.zoom;
         state.osmd.render();
 
         extractScoreData(true);
 
-        // Restore exact cursor position & scroll smoothly there
-        seekToTicks(savedTicks, { snapScroll: true, keepPlaying: false });
+        // Sync cursor & camera to the live musical position without pausing or restarting Tone.Transport
+        const liveTicks = state.isPlaying
+            ? Math.max(0, Math.min(state.totalMusicalTicks, Tone.Transport.ticks))
+            : state.currentTicks;
+        state.currentTicks = liveTicks;
+        state.smoothTicks = liveTicks;
 
-        if (wasPlaying) {
-            startPlayback();
+        const targetStep = getStepIndexAtTicks(liveTicks);
+        moveCursorToStep(targetStep);
+        if (state.isPlaying) {
+            highlightStepNotes(targetStep);
+            state.lastFrameTime = performance.now();
         }
+        updateCameraForTicks(liveTicks, 0, true, false);
+        updateTimelineReadout(liveTicks);
     }
 
     // ===========================================
@@ -2066,6 +1670,18 @@
         ensureCursorZIndex();
         state.currentStepIndex = targetIndex;
 
+        // Enforce precomputed step (x, y) so compactified multi-measure rests never jump the cursor to (0, 0)
+        const step = state.cursorSteps[targetIndex];
+        const cursorEl = cursor.cursorElement;
+        if (cursorEl && step) {
+            const cursorType = getCurrentCursorType();
+            const isMeasureCursor = cursorType === 3 || cursorType === 4;
+            if (!isMeasureCursor) {
+                cursorEl.style.left = `${step.x.toFixed(2)}px`;
+            }
+            cursorEl.style.top = `${step.y.toFixed(2)}px`;
+        }
+
         if (state.isPlaying) {
             highlightStepNotes(targetIndex);
         }
@@ -2080,17 +1696,19 @@
         const curr = steps[stepIdx];
         if (!curr) return;
 
-        if (state.continuousScrollMode) {
-            // Smoothly interpolate playhead X across the score at 60fps+
-            const interpX = getInterpolatedCursorX(nowTicks);
-
-            // Glide the cursor element smoothly with the interpolated playhead
-            const cursorEl = state.osmd?.cursor?.cursorElement;
-            const cursorType = getCurrentCursorType();
-            const isMeasureCursor = cursorType === 3 || cursorType === 4;
-            if (cursorEl && !isMeasureCursor) {
+        // Smoothly interpolate playhead X across the score (including across multi-measure rests!) at 60fps+
+        const interpX = getInterpolatedCursorX(nowTicks);
+        const cursorEl = state.osmd?.cursor?.cursorElement;
+        const cursorType = getCurrentCursorType();
+        const isMeasureCursor = cursorType === 3 || cursorType === 4;
+        if (cursorEl) {
+            if (!isMeasureCursor) {
                 cursorEl.style.left = `${interpX.toFixed(2)}px`;
             }
+            cursorEl.style.top = `${curr.y.toFixed(2)}px`;
+        }
+
+        if (state.continuousScrollMode) {
 
             if (keepViewport) {
                 // When clicking a note while paused, keep the score paper stationary under the mouse
@@ -2710,7 +2328,7 @@
         if (!dom.resetMixerBtn) return;
         const partList = Object.values(state.parts);
         const isModified = partList.some(
-            (p) => p.muted || p.soloed || p.highlighted || p.volume !== CONFIG.DEFAULT_PART_VOLUME || (p.detectedPatchId && p.patchId !== p.detectedPatchId)
+            (p) => p.muted || p.soloed || p.highlighted || p.hidden || p.volume !== CONFIG.DEFAULT_PART_VOLUME || (p.detectedPatchId && p.patchId !== p.detectedPatchId)
         );
         dom.resetMixerBtn.hidden = !isModified;
     }
@@ -2727,7 +2345,7 @@
         let layer = inner.querySelector('.staff-highlight-layer');
         const highlightedPartIds = new Set(
             Object.values(state.parts)
-                .filter((p) => p.highlighted)
+                .filter((p) => p.highlighted && !p.hidden)
                 .map((p) => p.id)
         );
 
@@ -2750,18 +2368,21 @@
         const osmd = state.osmd;
         const unitToPx = 10 * state.zoom;
 
-        // Build lookup from OSMD Staff object and staff index to partId
+        // Build lookup from OSMD Staff object and visible staff index to partId
         const staffToPartId = new Map();
         const staffIndexToPartId = [];
         if (osmd.sheet?.Instruments) {
             osmd.sheet.Instruments.forEach((inst, instIdx) => {
                 const pid = inst.IdString || `part_${inst.Id ?? instIdx}`;
+                const isVisible = inst.Visible !== false;
                 if (Array.isArray(inst.Staves) && inst.Staves.length > 0) {
                     for (const st of inst.Staves) {
                         staffToPartId.set(st, pid);
-                        staffIndexToPartId.push(pid);
+                        if (isVisible) {
+                            staffIndexToPartId.push(pid);
+                        }
                     }
-                } else {
+                } else if (isVisible) {
                     staffIndexToPartId.push(pid);
                 }
             });
@@ -2869,25 +2490,124 @@
     }
 
     /**
-     * Vertically centers the currently highlighted part's staff in the middle of the score viewport.
-     * Adds dynamic top/bottom padding to `.osmd-score-track` only when a part is highlighted so even
-     * the top-most or bottom-most staff can sit in the exact vertical center. When no part is
-     * highlighted, removes vertical padding and leaves `box.scrollTop` untouched for free scrolling.
+     * Renders clear bar numbers above EVERY visible staff on every measure
+     * so the bar number is always visible on all staves (including when a single part is highlighted and centered).
      */
-    function updateVerticalCenteringForHighlight(snap = true, dt = 1 / 60) {
+    function renderStaffBarNumbers() {
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        let layer = inner.querySelector('.staff-bar-numbers-layer');
+        if (!state.scoreLoaded || !state.osmd) {
+            if (layer) layer.remove();
+            return;
+        }
+
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'staff-bar-numbers-layer';
+            inner.appendChild(layer);
+        } else {
+            layer.innerHTML = '';
+        }
+
+        const osmd = state.osmd;
+        const mList = osmd.GraphicSheet?.MeasureList;
+        if (!Array.isArray(mList) || mList.length === 0) return;
+
+        const unitToPx = 10 * state.zoom;
+        const fontSizePx = Math.max(9, Math.round(10.5 * state.zoom));
+        const frag = document.createDocumentFragment();
+
+        for (let mIdx = 0; mIdx < mList.length; mIdx++) {
+            const col = mList[mIdx];
+            if (!Array.isArray(col)) continue;
+
+            const rawBarNum = state.barData[mIdx]?.barNumber ??
+                osmd.sheet?.SourceMeasures?.[mIdx]?.MeasureNumber ??
+                (mIdx + 1);
+
+            for (let sIdx = 0; sIdx < col.length; sIdx++) {
+                const gm = col[sIdx];
+                if (!gm || gm.isReducedToMultiRest) continue;
+                const absPos = gm.PositionAndShape?.AbsolutePosition;
+                const size = gm.PositionAndShape?.Size;
+                if (!absPos || !size || !(size.width > 0.01) || typeof absPos.x !== 'number' || typeof absPos.y !== 'number') continue;
+                if (mIdx > 0 && absPos.x <= 0.01) continue;
+
+                const leftPx = Math.max(2, (absPos.x + 0.15) * unitToPx);
+                const topPx = Math.max(1, (absPos.y - 1.85) * unitToPx);
+
+                const badge = document.createElement('span');
+                badge.className = 'staff-bar-number';
+                badge.textContent = String(rawBarNum);
+                badge.style.left = `${leftPx.toFixed(1)}px`;
+                badge.style.top = `${topPx.toFixed(1)}px`;
+                badge.style.fontSize = `${fontSizePx}px`;
+                frag.appendChild(badge);
+            }
+        }
+
+        layer.appendChild(frag);
+    }
+
+    /**
+     * Vertically centers the score in the viewport:
+     * - When a part is highlighted ('H'): centers that highlighted part's staff in the exact vertical middle.
+     * - Standard (no part highlighted): centers the whole score vertically in the viewport (using top padding
+     *   when the score fits inside the viewport, or initial centered scrollTop when taller than the viewport,
+     *   without rubberbanding during playback or manual mobile scrolling).
+     */
+    function updateVerticalCenteringForHighlight(snap = true, dt = 1 / 60, allowStandardScrollReset = true) {
         const box = dom.scoreDisplayArea;
         const track = box ? box.querySelector('.osmd-score-track') : null;
         const inner = box ? box.querySelector('.osmd-score-inner') : null;
         if (!box || !track) return;
 
+        const viewportH = box.clientHeight;
+        if (viewportH <= 0) return;
+        const halfH = viewportH * 0.5;
+        const innerH = inner ? inner.offsetHeight : box.scrollHeight;
+
         const bands = state.highlightedStaffBands;
         if (!bands || bands.length === 0) {
-            track.style.paddingTop = '0px';
             track.style.paddingBottom = '0px';
+
+            // Standard unhighlighted vertical centering
+            if (!state.continuousScrollMode && innerH > viewportH) {
+                track.style.paddingTop = '0px';
+                return;
+            }
+
+            const firstStep = state.cursorSteps[0];
+            const systemCenterY = (state.continuousScrollMode && firstStep && firstStep.height > 0)
+                ? (firstStep.y + firstStep.height * 0.5)
+                : (innerH * 0.5);
+
+            if (innerH <= viewportH) {
+                // Score fits vertically in viewport: center via top padding without causing vertical overflow
+                const maxPadWithoutOverflow = Math.max(0, viewportH - innerH);
+                const idealPadTop = Math.max(0, Math.round(halfH - systemCenterY));
+                const padTop = Math.min(maxPadWithoutOverflow, idealPadTop);
+                if (track.style.paddingTop !== `${padTop}px`) {
+                    track.style.paddingTop = `${padTop}px`;
+                }
+            } else {
+                // Score is taller than viewport (e.g. mobile or large ensemble): center initial scrollTop once,
+                // then leave scrollTop untouched so the user can freely scroll without rubberbanding
+                if (track.style.paddingTop !== '0px') {
+                    track.style.paddingTop = '0px';
+                }
+                if (snap && allowStandardScrollReset) {
+                    const maxScrollY = Math.max(0, innerH - viewportH);
+                    box.scrollTop = Math.max(0, Math.min(maxScrollY, Math.round(systemCenterY - halfH)));
+                }
+            }
             return;
         }
 
-        // Pick the highlighted staff band on the active system (closest to current cursor step Y)
+        // Highlighted part ('H'): pick the highlighted staff band on the active system
         const currStep = state.cursorSteps[state.currentStepIndex];
         let targetBand = bands[0];
         if (currStep && bands.length > 1) {
@@ -2902,10 +2622,6 @@
             }
         }
 
-        const viewportH = box.clientHeight;
-        if (viewportH <= 0) return;
-        const halfH = viewportH * 0.5;
-        const innerH = inner ? inner.offsetHeight : box.scrollHeight;
         const bandCenterY = targetBand.centerY;
 
         const padTop = Math.max(0, Math.round(halfH - bandCenterY));
@@ -2934,45 +2650,43 @@
         }
     }
 
+    function syncGlobalSoundSelectUI() {
+        if (!dom.soundSelect) return;
+        const partList = Object.values(state.parts);
+        if (!partList.length) {
+            dom.soundSelect.value = INSTRUMENT_CATALOG[state.soundPreset] ? state.soundPreset : 'piano';
+            return;
+        }
+        const firstPatch = partList[0].patchId || 'piano';
+        const allSame = partList.every((p) => (p.patchId || 'piano') === firstPatch);
+        if (allSame && INSTRUMENT_CATALOG[firstPatch]) {
+            state.soundPreset = firstPatch;
+            dom.soundSelect.value = firstPatch;
+        } else {
+            state.soundPreset = 'custom';
+            dom.soundSelect.value = 'custom';
+        }
+    }
+
     function buildPartInstrumentSelect(part) {
         const select = document.createElement('select');
         select.className = 'part-instrument-select';
-        select.title = `Select playback instrument for ${part.name} (Score default: ${INSTRUMENT_CATALOG[part.detectedPatchId]?.label || 'Grand Piano'})`;
+        select.title = `Select playback instrument for ${part.name}`;
         select.setAttribute('aria-label', `${part.name} Instrument`);
 
-        // Group catalog entries by category
-        const groups = {};
         for (const def of Object.values(INSTRUMENT_CATALOG)) {
-            if (!groups[def.category]) groups[def.category] = [];
-            groups[def.category].push(def);
+            const opt = document.createElement('option');
+            opt.value = def.id;
+            opt.textContent = def.label;
+            select.appendChild(opt);
         }
 
-        for (const [category, items] of Object.entries(groups)) {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = category;
-
-            for (const def of items) {
-                const opt = document.createElement('option');
-                opt.value = def.id;
-                const isScoreDefault = def.id === part.detectedPatchId;
-                const defaultSuffix = isScoreDefault
-                    ? (part.isVocal ? ' ★ (Vocal)' : ' ★ (Score)')
-                    : '';
-                opt.textContent = `${def.label}${defaultSuffix}`;
-                optgroup.appendChild(opt);
-            }
-            select.appendChild(optgroup);
-        }
-
-        select.value = part.patchId || 'piano';
+        select.value = INSTRUMENT_CATALOG[part.patchId] ? part.patchId : 'piano';
 
         select.addEventListener('change', () => {
             const chosenPatch = select.value;
-            if (dom.soundSelect && dom.soundSelect.value !== 'auto') {
-                state.soundPreset = 'auto';
-                dom.soundSelect.value = 'auto';
-            }
             setPartInstrument(part.id, chosenPatch, true);
+            syncGlobalSoundSelectUI();
         });
 
         return select;
@@ -3003,8 +2717,9 @@
             if (part.muted) card.classList.add('is-muted');
             if (part.soloed) card.classList.add('is-soloed');
             if (part.highlighted) card.classList.add('is-highlighted');
+            if (part.hidden) card.classList.add('is-hidden-part');
 
-            // Row 1: Part Name + Vocal/Score Tag + Mute / Solo / Highlight Buttons
+            // Row 1: Part Name + Vocal/Score Tag + Mute / Solo / Highlight / Visibility (Eye) Buttons
             const headerRow = document.createElement('div');
             headerRow.className = 'part-header-row';
 
@@ -3055,7 +2770,7 @@
             const highlightBtn = document.createElement('button');
             highlightBtn.className = `part-button highlight-btn${part.highlighted ? ' active' : ''}`;
             highlightBtn.textContent = 'H';
-            highlightBtn.title = `Highlight ${part.name} (Yellow staff marker, 100% volume, other parts 50%)`;
+            highlightBtn.title = `Highlight ${part.name} (Yellow staff marker, ${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%)`;
             highlightBtn.setAttribute('aria-pressed', String(Boolean(part.highlighted)));
             highlightBtn.addEventListener('click', () => {
                 const willHighlight = !part.highlighted;
@@ -3080,13 +2795,42 @@
                 refreshActiveNoteHighlightColors();
                 applyAllPartGains(false);
                 if (willHighlight) {
-                    toast(`Highlighted ${part.name} (100% volume, other parts 50%)`);
+                    toast(`Highlighted ${part.name} (${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%)`);
                 }
+            });
+
+            const visibilityBtn = document.createElement('button');
+            visibilityBtn.className = `part-button visibility-btn${part.hidden ? ' is-hidden' : ''}`;
+            visibilityBtn.title = part.hidden ? `Show ${part.name} in score` : `Hide ${part.name} from score`;
+            visibilityBtn.setAttribute('aria-label', part.hidden ? `Show ${part.name} in score` : `Hide ${part.name} from score`);
+            visibilityBtn.setAttribute('aria-pressed', String(Boolean(part.hidden)));
+            visibilityBtn.innerHTML = part.hidden
+                ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`
+                : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+            visibilityBtn.addEventListener('click', () => {
+                if (!part.hidden) {
+                    const visibleCount = Object.values(state.parts).filter((p) => !p.hidden).length;
+                    if (visibleCount <= 1) {
+                        toast('At least one part must remain visible in the score', 'info');
+                        return;
+                    }
+                }
+                part.hidden = !part.hidden;
+                renderPartMixerUI();
+                toast(part.hidden ? `Hidden ${part.name} staff` : `Showing ${part.name} staff`);
+                if (state.pendingVisibilityRaf) {
+                    cancelAnimationFrame(state.pendingVisibilityRaf);
+                }
+                state.pendingVisibilityRaf = requestAnimationFrame(() => {
+                    state.pendingVisibilityRaf = null;
+                    reRenderScorePreservingState();
+                });
             });
 
             btnGroup.appendChild(muteBtn);
             btnGroup.appendChild(soloBtn);
             btnGroup.appendChild(highlightBtn);
+            btnGroup.appendChild(visibilityBtn);
             headerRow.appendChild(titleWrap);
             headerRow.appendChild(btnGroup);
             card.appendChild(headerRow);
@@ -3174,6 +2918,7 @@
         state.smoothTicks = 0;
         state.currentStepIndex = 0;
         state.notes = [];
+        state.allScoreNotes = [];
         state.cursorSteps = [];
         state.barData = [];
         state.metronomeBeats = [];
@@ -3220,6 +2965,9 @@
             });
 
             await osmd.load(content);
+            if (osmd.EngravingRules) {
+                osmd.EngravingRules.RenderMeasureNumbers = false;
+            }
             osmd.zoom = state.zoom;
             osmd.render();
 
@@ -3238,6 +2986,7 @@
 
             // Ensure cursor and centered camera are locked at step 0 (Bar 1, Beat 1)
             updateContinuousHorizontalPadding(false);
+            updateVerticalCenteringForHighlight(true, 1 / 60, true);
             seekToTicks(0, { snapScroll: true, keepPlaying: false });
 
             const numParts = Object.keys(state.parts).length;
@@ -3287,6 +3036,216 @@
             reader.readAsBinaryString(file);
         } else {
             reader.readAsText(file);
+        }
+    }
+
+    // ===========================================
+    // 'SCORES' FOLDER CATALOG & LOADER
+    // ===========================================
+
+    const DEFAULT_SCORES_FOLDER_FILES = [
+        'BWV248_01_jauchzet_frohlocket_johann_sebastian_bach.mxl',
+    ];
+
+    function formatScoreFileLabel(fileName) {
+        const base = String(fileName || '')
+            .replace(/^.*[\\/]/, '')
+            .replace(/\.(mxl|musicxml|xml)$/i, '');
+        const words = base.split(/[_\s-]+/).filter(Boolean);
+        return words
+            .map((w) => {
+                if (/^bwv\d+$/i.test(w)) return w.toUpperCase();
+                if (/^\d+$/.test(w)) return w;
+                return w.charAt(0).toUpperCase() + w.slice(1);
+            })
+            .join(' ');
+    }
+
+    function getScoresFolderEntries() {
+        const entriesByFile = new Map();
+
+        // 1. Pre-bundled manifest entries (works on both file:// and http://)
+        if (Array.isArray(window.PYP_SCORES_MANIFEST)) {
+            for (const item of window.PYP_SCORES_MANIFEST) {
+                if (!item || !item.fileName) continue;
+                entriesByFile.set(item.fileName, {
+                    fileName: item.fileName,
+                    path: item.path || `Scores/${item.fileName}`,
+                    format: (item.format || item.fileName.split('.').pop() || 'mxl').toLowerCase(),
+                    base64: item.base64 || null,
+                    label: item.label || formatScoreFileLabel(item.fileName),
+                });
+            }
+        }
+
+        // 2. Fallback known files in Scores/
+        for (const fn of DEFAULT_SCORES_FOLDER_FILES) {
+            if (!entriesByFile.has(fn)) {
+                entriesByFile.set(fn, {
+                    fileName: fn,
+                    path: `Scores/${fn}`,
+                    format: (fn.split('.').pop() || 'mxl').toLowerCase(),
+                    base64: null,
+                    label: formatScoreFileLabel(fn),
+                });
+            }
+        }
+
+        // 3. Any dynamically discovered files from Scores/ directory listing
+        if (Array.isArray(state.discoveredScoresFolderFiles)) {
+            for (const fn of state.discoveredScoresFolderFiles) {
+                if (!entriesByFile.has(fn)) {
+                    entriesByFile.set(fn, {
+                        fileName: fn,
+                        path: `Scores/${fn}`,
+                        format: (fn.split('.').pop() || 'mxl').toLowerCase(),
+                        base64: null,
+                        label: formatScoreFileLabel(fn),
+                    });
+                }
+            }
+        }
+
+        return Array.from(entriesByFile.values());
+    }
+
+    async function discoverScoresFolderOverHttp() {
+        if (window.location.protocol === 'file:') return;
+        try {
+            const resp = await fetch('Scores/');
+            if (!resp.ok) return;
+            const html = await resp.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const links = doc.querySelectorAll('a[href]');
+            const found = [];
+            links.forEach((a) => {
+                const rawHref = a.getAttribute('href') || '';
+                const decoded = decodeURIComponent(rawHref.split('?')[0].split('#')[0]);
+                const fileName = decoded.replace(/^.*[\\/]/, '');
+                if (/\.(mxl|musicxml|xml)$/i.test(fileName)) {
+                    found.push(fileName);
+                }
+            });
+            if (found.length > 0) {
+                state.discoveredScoresFolderFiles = found;
+                renderScoresFolderUI();
+            }
+        } catch (_) {
+            // Static servers without directory listing use manifest + default catalog
+        }
+    }
+
+    async function loadScoreFromScoresFolder(fileName) {
+        if (!fileName) return;
+        const entries = getScoresFolderEntries();
+        const entry = entries.find((e) => e.fileName === fileName) || {
+            fileName,
+            path: `Scores/${fileName}`,
+            format: (fileName.split('.').pop() || 'mxl').toLowerCase(),
+            base64: null,
+            label: formatScoreFileLabel(fileName),
+        };
+
+        const isMxl = entry.format === 'mxl' || entry.fileName.toLowerCase().endsWith('.mxl');
+
+        // 1. If pre-bundled base64 data is available in manifest, decode directly in memory (works on file:// & http://)
+        if (entry.base64) {
+            try {
+                if (isMxl) {
+                    const binaryStr = window.atob(entry.base64);
+                    await loadMusicXMLContent(binaryStr, entry.label);
+                    return;
+                } else {
+                    const bytes = Uint8Array.from(window.atob(entry.base64), (c) => c.charCodeAt(0));
+                    const xmlText = new TextDecoder('utf-8').decode(bytes);
+                    await loadMusicXMLContent(xmlText, entry.label);
+                    return;
+                }
+            } catch (err) {
+                console.warn('[PYP] Manifest base64 decode failed, trying HTTP fetch:', err);
+            }
+        }
+
+        // 2. Otherwise fetch from Scores/<fileName> over HTTP
+        try {
+            const encodedPath = `Scores/${encodeURIComponent(entry.fileName)}`;
+            const resp = await fetch(encodedPath);
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            if (isMxl) {
+                const blob = await resp.blob();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    loadMusicXMLContent(e.target.result, entry.label);
+                };
+                reader.onerror = () => {
+                    toast(`Could not read ${entry.fileName}`, 'error');
+                };
+                reader.readAsBinaryString(blob);
+            } else {
+                const xmlText = await resp.text();
+                await loadMusicXMLContent(xmlText, entry.label);
+            }
+        } catch (err) {
+            console.error('[PYP] Failed to fetch score from Scores folder:', err);
+            toast(`Could not load Scores/${entry.fileName}`, 'error');
+        }
+    }
+
+    function renderScoresFolderUI() {
+        const entries = getScoresFolderEntries();
+
+        // 1. Top Toolbar dropdown
+        if (dom.scoresFolderSelect) {
+            const currentVal = dom.scoresFolderSelect.value;
+            dom.scoresFolderSelect.innerHTML = '<option value="">Scores Folder…</option>';
+            for (const entry of entries) {
+                const opt = document.createElement('option');
+                opt.value = entry.fileName;
+                opt.textContent = entry.label;
+                opt.title = `Scores/${entry.fileName}`;
+                dom.scoresFolderSelect.appendChild(opt);
+            }
+            if (currentVal && entries.some((e) => e.fileName === currentVal)) {
+                dom.scoresFolderSelect.value = currentVal;
+            }
+        }
+
+        // 2. Welcome Screen Scores Folder list
+        const sectionEl = document.getElementById('welcomeScoresFolderSection');
+        const listEl = document.getElementById('welcomeScoresFolderList');
+        if (sectionEl && listEl) {
+            listEl.innerHTML = '';
+            if (entries.length === 0) {
+                sectionEl.hidden = true;
+                return;
+            }
+            sectionEl.hidden = false;
+            const frag = document.createDocumentFragment();
+            for (const entry of entries) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'score-folder-item-btn';
+                btn.title = `Load Scores/${entry.fileName}`;
+                btn.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                    <span class="score-folder-item-name">${entry.label}</span>
+                `;
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (dom.scoresFolderSelect) {
+                        dom.scoresFolderSelect.value = entry.fileName;
+                    }
+                    loadScoreFromScoresFolder(entry.fileName);
+                });
+                frag.appendChild(btn);
+            }
+            listEl.appendChild(frag);
         }
     }
 
@@ -3661,6 +3620,7 @@
                 loadMusicXMLContent(getDemoEnsembleMusicXML(), 'Quartet in G Major (Fl/Ob/Vln/Vc)');
             });
         }
+        renderScoresFolderUI();
     }
 
     function resetAppToHome() {
@@ -3686,6 +3646,7 @@
         state.rawXmlPartMeta = {};
         state.parts = {};
         state.notes = [];
+        state.allScoreNotes = [];
         state.cursorSteps = [];
         state.barData = [];
         state.metronomeBeats = [];
@@ -3702,9 +3663,10 @@
         state.activeBarBaseBpm = CONFIG.DEFAULT_BPM;
         state.tempoPercent = CONFIG.DEFAULT_TEMPO_PERCENT;
         state.zoom = 1.0;
-        state.soundPreset = 'auto';
+        state.soundPreset = 'piano';
 
-        if (dom.soundSelect) dom.soundSelect.value = 'auto';
+        if (dom.soundSelect) dom.soundSelect.value = 'piano';
+        if (dom.scoresFolderSelect) dom.scoresFolderSelect.value = '';
         if (dom.zoomResetBtn) dom.zoomResetBtn.textContent = '100%';
         if (dom.fileInput) dom.fileInput.value = '';
 
@@ -3738,6 +3700,18 @@
             });
         }
 
+        // Re-center vertically when the Part Mixer drawer is expanded or collapsed
+        const toggleMixerBtn = document.getElementById('togglePartControlsButton');
+        if (toggleMixerBtn) {
+            toggleMixerBtn.addEventListener('click', () => {
+                requestAnimationFrame(() => {
+                    if (state.scoreLoaded) {
+                        updateVerticalCenteringForHighlight(true, 1 / 60, false);
+                    }
+                });
+            });
+        }
+
         // File Open buttons
         const triggerOpen = (e) => {
             if (e) e.stopPropagation();
@@ -3748,12 +3722,25 @@
         if (dom.fileInput) {
             dom.fileInput.addEventListener('change', (e) => {
                 const file = e.target.files && e.target.files[0];
-                if (file) loadScoreFromFile(file);
+                if (file) {
+                    if (dom.scoresFolderSelect) dom.scoresFolderSelect.value = '';
+                    loadScoreFromFile(file);
+                }
                 dom.fileInput.value = '';
             });
         }
 
+        if (dom.scoresFolderSelect) {
+            dom.scoresFolderSelect.addEventListener('change', () => {
+                const chosenFile = dom.scoresFolderSelect.value;
+                if (chosenFile) {
+                    loadScoreFromScoresFolder(chosenFile);
+                }
+            });
+        }
+
         bindWelcomeScreenActions();
+        discoverScoresFolderOverHttp();
 
         // Drag & Drop support
         if (window.PYP_UX && typeof window.PYP_UX.initDropZone === 'function') {
@@ -4023,20 +4010,18 @@
         // Global Instrument Preset / Override Selector
         if (dom.soundSelect) {
             dom.soundSelect.addEventListener('change', async () => {
-                state.soundPreset = dom.soundSelect.value;
+                const chosen = dom.soundSelect.value;
+                if (!INSTRUMENT_CATALOG[chosen]) return;
+                state.soundPreset = chosen;
                 for (const part of Object.values(state.parts)) {
-                    if (state.soundPreset === 'auto') {
-                        part.patchId = part.detectedPatchId || 'piano';
-                    } else if (INSTRUMENT_CATALOG[state.soundPreset]) {
-                        part.patchId = state.soundPreset;
-                    }
+                    part.patchId = chosen;
                 }
                 renderPartMixerUI();
 
                 if (state.audioInitialized && Object.keys(state.parts).length > 0) {
                     await loadAndBuildAllPartInstruments();
                 }
-                const label = dom.soundSelect.options[dom.soundSelect.selectedIndex]?.textContent || state.soundPreset;
+                const label = dom.soundSelect.options[dom.soundSelect.selectedIndex]?.textContent || chosen;
                 toast(`Instruments: ${label}`);
             });
         }
@@ -4069,22 +4054,29 @@
             });
         }
 
-        // Reset Mixer button (Restores volume, mute/solo, AND score-default instruments!)
+        // Reset Mixer button (Restores volume, mute/solo, AND default instruments!)
         if (dom.resetMixerBtn) {
             dom.resetMixerBtn.addEventListener('click', async () => {
-                state.soundPreset = 'auto';
-                if (dom.soundSelect) dom.soundSelect.value = 'auto';
+                state.soundPreset = 'piano';
+                if (dom.soundSelect) dom.soundSelect.value = 'piano';
 
+                const anyWasHidden = Object.values(state.parts).some((p) => p.hidden);
                 for (const part of Object.values(state.parts)) {
                     part.volume = CONFIG.DEFAULT_PART_VOLUME;
                     part.muted = false;
                     part.soloed = false;
                     part.highlighted = false;
+                    part.hidden = false;
                     part.patchId = part.detectedPatchId || 'piano';
                 }
-                renderPartMixerUI();
-                renderStaffHighlights();
-                refreshActiveNoteHighlightColors();
+                syncGlobalSoundSelectUI();
+                if (anyWasHidden) {
+                    reRenderScorePreservingState();
+                } else {
+                    renderPartMixerUI();
+                    renderStaffHighlights();
+                    refreshActiveNoteHighlightColors();
+                }
                 if (state.audioInitialized && Object.keys(state.parts).length > 0) {
                     await loadAndBuildAllPartInstruments();
                 } else {
@@ -4105,12 +4097,15 @@
                 if (state.scoreLoaded && dom.scoreDisplayArea) {
                     if (state.continuousScrollMode) {
                         updateContinuousHorizontalPadding(false);
+                        updateVerticalCenteringForHighlight(true, 1 / 60, false);
                         updateCameraForTicks(state.isPlaying ? state.smoothTicks : state.currentTicks, 0, true);
                     } else {
                         const newW = dom.scoreDisplayArea.clientWidth;
                         if (Math.abs(newW - lastBoxWidth) > 24) {
                             lastBoxWidth = newW;
                             reRenderScorePreservingState();
+                        } else {
+                            updateVerticalCenteringForHighlight(true, 1 / 60, false);
                         }
                     }
                 }

@@ -30,6 +30,10 @@
             </button>
             <input type="file" id="fileInput" accept=".xml,.musicxml,.mxl" hidden>
 
+            <select id="scoresFolderSelect" class="compact-select scores-folder-select" title="Load a score from the Scores folder" aria-label="Load score from Scores folder">
+                <option value="">Scores Folder…</option>
+            </select>
+
             <div class="score-title-chip" id="scoreTitleChip" title="No score loaded">
                 <span id="scoreTitleText">No score loaded</span>
             </div>
@@ -180,6 +184,10 @@
                             Classical Quartet (Fl/Ob/Vln/Vc)
                         </button>
                     </div>
+                    <div class="scores-folder-section" id="welcomeScoresFolderSection">
+                        <div class="scores-folder-heading">Scores Folder</div>
+                        <div class="scores-folder-list" id="welcomeScoresFolderList"></div>
+                    </div>
                     <div class="quick-tips">
                         <span><kbd>Space</kbd> Play/Pause</span>
                         <span><kbd>←</kbd><kbd>→</kbd> Prev/Next Bar</span>
@@ -257,12 +265,10 @@
                 <!-- Instrument Preset / Global Override Selector -->
                 <div class="select-group">
                     <label for="soundSelect" class="select-label">Instruments</label>
-                    <select id="soundSelect" class="compact-select" title="Assign instruments automatically from the score or override all parts">
-                        <option value="auto">From Score (Singers → Piano)</option>
+                    <select id="soundSelect" class="compact-select" title="Select playback instrument for all parts">
                         <option value="piano">All Grand Piano</option>
-                        <option value="organ">All Pipe Organ</option>
-                        <option value="harpsichord">All Harpsichord</option>
-                        <option value="strings">All String Ensemble</option>
+                        <option value="wave">All Smooth Wave</option>
+                        <option value="custom" hidden>Mixed (Per Part)</option>
                     </select>
                 </div>
 
@@ -333,6 +339,7 @@
     <!-- Toast Notifications -->
     <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
+    <script src="Scores/scores-manifest.js" defer></script>
     <script src="ux_script.js" defer></script>
     <script src="pyp-script.js" defer></script>
 </body>
