@@ -71,12 +71,12 @@
         'wave': {
             id: 'wave',
             label: 'Smooth Wave',
-            urls: null, // Pure, warm harmonic wave with clear pitch center & full sustain for singing
-            release: 0.14,
-            attack: 0.018,
-            volumeDb: -2,
+            urls: null, // Pure, warm harmonic wave with clear pitch center & clean headroom on mobile speakers
+            release: 0.16,
+            attack: 0.024,
+            volumeDb: -12,
             durationFactor: 0.98,
-            filter: { type: 'lowpass', frequency: 2400, Q: 0.6 },
+            filter: { type: 'lowpass', frequency: 1900, Q: 0.5 },
             synthFamily: 'wave',
         },
     };
@@ -463,8 +463,18 @@
 
     function ensureMasterAudioChain() {
         if (state.masterGain) return;
-        state.masterLimiter = new Tone.Limiter(-1).toDestination();
-        state.masterGain = new Tone.Gain(state.masterMuted ? 0 : state.masterVolume / 100).connect(state.masterLimiter);
+        // Use a smooth, slow-release compressor (250ms release, soft 12dB knee) before a -3dB ceiling limiter.
+        // A bare Tone.Limiter(-1) has a 10ms release time that modulates individual wave cycles on sustained tones,
+        // causing audible overdrive/intermodulation distortion on mobile devices when multiple voices sum together.
+        state.masterLimiter = new Tone.Limiter(-3).toDestination();
+        state.masterCompressor = new Tone.Compressor({
+            threshold: -12,
+            ratio: 3,
+            attack: 0.015,
+            release: 0.25,
+            knee: 12,
+        }).connect(state.masterLimiter);
+        state.masterGain = new Tone.Gain(state.masterMuted ? 0 : masterVolumeToGain(state.masterVolume)).connect(state.masterCompressor);
 
         state.metronomeGain = new Tone.Gain(0.45).connect(state.masterGain);
         state.metronomeSynth = new Tone.Synth({
@@ -528,22 +538,21 @@
         switch (synthFamily) {
             case 'wave':
                 // Smooth, pitch-pure vocal rehearsal wave:
-                // Fundamental-rich custom harmonic wave (clear down into the Bass register on small speakers,
-                // silky-smooth in the Soprano register, zero vibrato/detuning so intonation is crystal clear,
-                // and full singing sustain so the exact note duration is heard)
+                // Tuned with -12 dB per-voice headroom and Q=0.5 lowpass smoothing so polyphonic sustained
+                // voices never clip or overdrive mobile phone/tablet speakers or the master bus.
                 return new Tone.PolySynth(Tone.Synth, {
                     maxPolyphony: 24,
                     oscillator: {
                         type: 'custom',
-                        partials: [1, 0.42, 0.18, 0.07, 0.03],
+                        partials: [1, 0.32, 0.10, 0.03],
                     },
                     envelope: {
-                        attack: 0.018,
-                        decay: 0.08,
-                        sustain: 0.92,
-                        release: 0.14,
+                        attack: 0.024,
+                        decay: 0.1,
+                        sustain: 0.82,
+                        release: 0.16,
                     },
-                    volume: -5,
+                    volume: -12,
                 }).connect(destinationNode);
 
             case 'piano':
