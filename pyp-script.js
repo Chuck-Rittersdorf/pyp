@@ -19,8 +19,9 @@
         HIGHLIGHT_OTHER_VOLUME: 70,
         MIN_TEMPO_PERCENT: 25,
         MAX_TEMPO_PERCENT: 200,
+        BASE_OSMD_ZOOM: 0.70, // 100% UI zoom corresponds to what was previously 70% OSMD zoom
         MIN_ZOOM: 0.5,
-        MAX_ZOOM: 1.8,
+        MAX_ZOOM: 2.0,
         ZOOM_STEP: 0.1,
         CONTINUOUS_CURSOR_ANCHOR_X: 0.50, // Keep cursor centered in middle (50%) for MuseScore 4 smooth right-to-left panning
         PAGE_SCROLL_TOP_ANCHOR: 0.22,
@@ -176,6 +177,7 @@
         cameraScrollX: 0,
         isCameraGliding: false,
         highlightedStaffBands: [],
+        centeredStaffBands: [],
         audioReadyPromise: null,
         auditionRestoreTimer: null,
         baseScoreBpm: CONFIG.DEFAULT_BPM,
@@ -328,6 +330,99 @@
 
         // Default to Grand Piano
         return { patchId: 'piano', isVocal: false, roleTag: 'Piano' };
+    }
+
+    /**
+     * Checks whether a score part is a Harpsichord, Piano, or Continuo keyboard accompaniment part
+     * that should have its staff hidden by default when a multi-part score is loaded.
+     */
+    function isHarpsichordOrPianoPart(partInfo, allPartInfos = []) {
+        const detected = detectPartInstrument(partInfo, allPartInfos);
+        if (detected.isVocal) return false;
+
+        const rawText = [
+            partInfo.name || '',
+            partInfo.xmlMeta?.partName || '',
+            partInfo.xmlMeta?.instrumentName || '',
+            partInfo.subInstrumentName || '',
+        ].join(' ').toLowerCase().trim();
+
+        const abbrev = (partInfo.xmlMeta?.partAbbrev || partInfo.name || '').toLowerCase().trim();
+        const soundId = (partInfo.xmlMeta?.instrumentSound || '').toLowerCase().trim();
+
+        if (
+            soundId.includes('harpsichord') ||
+            soundId.includes('clavichord') ||
+            soundId.includes('piano') ||
+            soundId.startsWith('keyboard.')
+        ) {
+            return true;
+        }
+
+        if (/\b(harpsichord|cembalo|clavicembalo|clavecin|klavecimbel|clavichord|virginal|spinet|continuo|basso\s*continuo|generalbass|piano|pianoforte|klavier|fortepiano)\b/i.test(rawText)) {
+            return true;
+        }
+
+        if (/^(hch|cemb|b\.?c\.?|pno|pf)\.?$/i.test(abbrev)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Auto-hides Harpsichord / Piano / Continuo staves on initial score load
+     * (as long as at least one non-keyboard part remains visible in the score).
+     */
+    function applyAutoHideKeyboardPartsOnLoad(osmd) {
+        if (!osmd || !osmd.sheet || !Array.isArray(osmd.sheet.Instruments)) return;
+        const instruments = osmd.sheet.Instruments;
+
+        const infos = instruments.map((inst, idx) => {
+            const partId = inst.IdString || `part_${inst.Id ?? idx}`;
+            const xmlMeta = state.rawXmlPartMeta[partId] || null;
+            const partName = (inst.Name || inst.NameLabel?.text || xmlMeta?.partName || `Part ${idx + 1}`).trim();
+            const subInst = inst.SubInstruments && inst.SubInstruments[0];
+            let hasLyrics = false;
+            try {
+                if (Array.isArray(inst.Voices)) {
+                    for (const v of inst.Voices) {
+                        if (Array.isArray(v.VoiceEntries)) {
+                            for (const ve of v.VoiceEntries) {
+                                if (ve.LyricsEntries && (ve.LyricsEntries.length > 0 || ve.LyricsEntries.size > 0)) {
+                                    hasLyrics = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (hasLyrics) break;
+                    }
+                }
+            } catch (_) { /* ignore */ }
+
+            return {
+                inst,
+                partId,
+                name: partName,
+                xmlMeta,
+                subInstrumentName: subInst?.name || '',
+                midiInstrumentId: inst.MidiInstrumentId ?? subInst?.midiInstrumentID,
+                hasLyrics,
+            };
+        });
+
+        const flags = infos.map((info) => isHarpsichordOrPianoPart(info, infos));
+        const hasVisibleNonKeyboardPart = flags.some((isKb) => !isKb);
+
+        infos.forEach((info, idx) => {
+            const shouldHide = hasVisibleNonKeyboardPart && flags[idx];
+            info.inst._autoHiddenOnLoad = shouldHide;
+            info.inst.Visible = !shouldHide;
+        });
+    }
+
+    function getEffectiveOsmdZoom() {
+        return state.zoom * CONFIG.BASE_OSMD_ZOOM;
     }
 
     // ===========================================
@@ -1123,6 +1218,7 @@
                         subInstrumentName: subInst?.name || '',
                         midiInstrumentId: inst.MidiInstrumentId ?? subInst?.midiInstrumentID,
                         hasLyrics,
+                        autoHiddenOnLoad: Boolean(inst._autoHiddenOnLoad),
                     };
                 });
 
@@ -1142,7 +1238,9 @@
                             muted: prev ? prev.muted : false,
                             soloed: prev ? prev.soloed : false,
                             highlighted: prev ? Boolean(prev.highlighted) : false,
-                            hidden: prev ? Boolean(prev.hidden) : false,
+                            centered: prev ? Boolean(prev.centered) : false,
+                            hidden: prev ? Boolean(prev.hidden) : Boolean(pInfo.autoHiddenOnLoad),
+                            defaultHidden: prev ? Boolean(prev.defaultHidden) : Boolean(pInfo.autoHiddenOnLoad),
                             patchId: prev ? prev.patchId : defaultPatch,
                             detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
                             isVocal: prev ? prev.isVocal : detected.isVocal,
@@ -1159,7 +1257,8 @@
 
         // Precompute in-memory pixel bounds for each measure column from GraphicSheet.MeasureList,
         // grouping compactified multi-measure rests so absorbed bars interpolate smoothly across the visible multi-rest bar.
-        const unitToPx = 10 * state.zoom;
+        const effZoom = getEffectiveOsmdZoom();
+        const unitToPx = 10 * effZoom;
         const mList = osmd.GraphicSheet?.MeasureList || [];
         const measureBounds = new Array(mList.length);
 
@@ -1269,6 +1368,11 @@
         let maxNoteEndTicks = 0;
 
         try {
+            // On initial load (!canFastRebuild), temporarily enable all instruments during the silent iterator walk
+            // so that auto-hidden keyboard parts (Harpsichord / Piano) still have their audio notes extracted into allScoreNotes.
+            if (!canFastRebuild && Array.isArray(osmd.sheet?.Instruments)) {
+                osmd.sheet.Instruments.forEach((inst) => { inst.Visible = true; });
+            }
             osmd.cursor.reset();
 
             while (!osmd.cursor.Iterator.EndReached && stepIdx < CONFIG.MAX_CURSOR_STEPS) {
@@ -1290,7 +1394,8 @@
                 const svgNotes = [];
                 const gNoteBySource = new Map();
                 const clickableNotes = [];
-                let firstGNoteXUnits = null;
+                let minVisibleGNoteXUnits = null;
+                let minVisibleGraceXUnits = null;
 
                 try {
                     if (typeof osmd.cursor.GNotesUnderCursor === 'function') {
@@ -1298,11 +1403,14 @@
                         if (gNotes) {
                             for (const gn of gNotes) {
                                 const gnInst = gn?.sourceNote?.ParentVoiceEntry?.ParentVoice?.Parent;
-                                const isInstVisible = !gnInst || gnInst.Visible !== false;
+                                const gnPartId = gnInst ? (gnInst.IdString || `part_${gnInst.Id ?? 0}`) : 'part_0';
+                                const isInstVisible = !nextParts[gnPartId]?.hidden && (!gnInst || !gnInst._autoHiddenOnLoad || Boolean(nextParts[gnPartId] && !nextParts[gnPartId].hidden));
                                 const svgEl = typeof gn.getSVGGElement === 'function' ? gn.getSVGGElement() : null;
                                 const gnPos = gn?.PositionAndShape?.AbsolutePosition;
+                                const isGraceNote = Boolean(gn?.sourceNote?.isGrace);
 
-                                // Only use graphical note X if it belongs to a visible part and is actually rendered inside this measure
+                                // Use the leftmost (primary stem-aligned) graphical note X among visible parts in this measure,
+                                // ignoring grace notes and right-displaced chord seconds so trills/chords never jitter horizontally
                                 if (
                                     !mBounds.isMultiRest &&
                                     isInstVisible &&
@@ -1310,14 +1418,18 @@
                                     gnPos &&
                                     typeof gnPos.x === 'number' &&
                                     gnPos.x > 0.01 &&
-                                    (gnPos.x * unitToPx) >= (mBounds.xPx - 6) &&
-                                    firstGNoteXUnits === null
+                                    (gnPos.x * unitToPx) >= (mBounds.xPx - 6)
                                 ) {
-                                    firstGNoteXUnits = gnPos.x;
+                                    if (isGraceNote) {
+                                        if (minVisibleGraceXUnits === null || gnPos.x < minVisibleGraceXUnits) {
+                                            minVisibleGraceXUnits = gnPos.x;
+                                        }
+                                    } else if (minVisibleGNoteXUnits === null || gnPos.x < minVisibleGNoteXUnits) {
+                                        minVisibleGNoteXUnits = gnPos.x;
+                                    }
                                 }
 
                                 if (svgEl && isInstVisible) {
-                                    const gnPartId = gnInst ? (gnInst.IdString || `part_${gnInst.Id ?? 0}`) : 'part_0';
                                     svgEl.dataset.partId = gnPartId;
                                     svgNotes.push(svgEl);
                                 }
@@ -1329,20 +1441,20 @@
                     }
                 } catch (_) { /* optional highlight */ }
 
-                // Compute exact cursor X in memory:
-                // - When visible notes exist at this step: align with the rendered notehead
-                // - When inside a compactified multi-measure rest or a bar where only hidden parts have notes:
-                //   glide smoothly across the visible bar / multi-rest bar proportional to musical time
+                const chosenGNoteXUnits = minVisibleGNoteXUnits !== null ? minVisibleGNoteXUnits : minVisibleGraceXUnits;
+                const rawVisibleX = chosenGNoteXUnits !== null ? ((chosenGNoteXUnits - 0.45) * unitToPx) : null;
+
+                // Initial fallback X before per-measure anchor interpolation & sub-beat trill stabilization
                 let stepX = mBounds.xPx;
-                if (firstGNoteXUnits !== null) {
-                    stepX = (firstGNoteXUnits - 0.45) * unitToPx;
+                if (rawVisibleX !== null) {
+                    stepX = rawVisibleX;
                 } else {
                     const spanStart = mBounds.spanStartTicks;
                     const spanEnd = mBounds.spanEndTicks;
                     if (spanEnd > spanStart) {
                         const frac = Math.max(0, Math.min(1, (ticks - spanStart) / (spanEnd - spanStart)));
-                        const insetLeft = Math.min(mBounds.widthPx * 0.12, 14 * state.zoom);
-                        const usableW = Math.max(4, mBounds.widthPx - insetLeft - 4 * state.zoom);
+                        const insetLeft = Math.min(mBounds.widthPx * 0.12, 14 * effZoom);
+                        const usableW = Math.max(4, mBounds.widthPx - insetLeft - 4 * effZoom);
                         stepX = mBounds.xPx + insetLeft + usableW * frac;
                     }
                 }
@@ -1375,7 +1487,9 @@
                                 muted: prev ? prev.muted : false,
                                 soloed: prev ? prev.soloed : false,
                                 highlighted: prev ? Boolean(prev.highlighted) : false,
-                                hidden: prev ? Boolean(prev.hidden) : false,
+                                centered: prev ? Boolean(prev.centered) : false,
+                                hidden: prev ? Boolean(prev.hidden) : Boolean(inst?._autoHiddenOnLoad),
+                                defaultHidden: prev ? Boolean(prev.defaultHidden) : Boolean(inst?._autoHiddenOnLoad),
                                 patchId: prev ? prev.patchId : defaultPatch,
                                 detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
                                 isVocal: prev ? prev.isVocal : detected.isVocal,
@@ -1387,6 +1501,8 @@
                             };
                         }
 
+                        const isPartVisible = !nextParts[partId]?.hidden;
+
                         for (const note of ve.Notes) {
                             if (note.isRest() || !note.Pitch || note.isGrace) continue;
 
@@ -1396,21 +1512,23 @@
                             const midi = extractMidiNote(note);
                             if (midi === null) continue;
 
-                            const gEntry = gNoteBySource.get(note);
-                            const pos = gEntry?.gn?.PositionAndShape?.AbsolutePosition;
-                            const noteX = (pos && typeof pos.x === 'number') ? (pos.x * unitToPx) : (stepX + 6 * state.zoom);
-                            const noteY = (pos && typeof pos.y === 'number') ? (pos.y * unitToPx) : null;
+                            if (isPartVisible) {
+                                const gEntry = gNoteBySource.get(note);
+                                const pos = gEntry?.gn?.PositionAndShape?.AbsolutePosition;
+                                const noteX = (pos && typeof pos.x === 'number') ? (pos.x * unitToPx) : (stepX + 6 * effZoom);
+                                const noteY = (pos && typeof pos.y === 'number') ? (pos.y * unitToPx) : null;
 
-                            clickableNotes.push({
-                                stepIdx,
-                                ticks,
-                                midi,
-                                durationWhole: writtenDurationWhole,
-                                partId,
-                                svgEl: gEntry?.svgEl || null,
-                                noteX,
-                                noteY,
-                            });
+                                clickableNotes.push({
+                                    stepIdx,
+                                    ticks,
+                                    midi,
+                                    durationWhole: writtenDurationWhole,
+                                    partId,
+                                    svgEl: gEntry?.svgEl || null,
+                                    noteX,
+                                    noteY,
+                                });
+                            }
 
                             if (!canFastRebuild) {
                                 let durationWhole = writtenDurationWhole;
@@ -1446,7 +1564,7 @@
 
                 const hitX = clickableNotes.length > 0
                     ? (clickableNotes.reduce((sum, cn) => sum + cn.noteX, 0) / clickableNotes.length)
-                    : (stepX + 6 * state.zoom);
+                    : (stepX + 6 * effZoom);
 
                 cursorSteps.push({
                     stepIdx,
@@ -1454,6 +1572,7 @@
                     realValue,
                     measureIndex,
                     x: stepX,
+                    rawVisibleX,
                     hitX,
                     y: mBounds.yPx,
                     height: mBounds.heightPx,
@@ -1465,6 +1584,15 @@
                 stepIdx++;
             }
 
+            stabilizeCursorStepCoordinates(cursorSteps, measureBounds, effZoom);
+
+            if (!canFastRebuild && Array.isArray(osmd.sheet?.Instruments)) {
+                osmd.sheet.Instruments.forEach((inst, idx) => {
+                    const pid = inst.IdString || `part_${inst.Id ?? idx}`;
+                    const pObj = nextParts[pid];
+                    if (pObj) inst.Visible = !pObj.hidden;
+                });
+            }
             osmd.cursor.reset();
         } finally {
             osmd.cursor.update = origCursorUpdate;
@@ -1545,6 +1673,281 @@
     }
 
     /**
+     * Stabilizes cursor X coordinates across every measure:
+     * 1. When a hidden part plays 32nd/64th notes or trills while visible parts hold longer notes,
+     *    interpolates missing sub-beat X coordinates between the surrounding visible notehead anchors
+     *    in that measure instead of jumping back and forth to an uncalibrated measure formula.
+     * 2. Across rapid sub-beat passages (16th/32nd/64th notes and written-out trills), regularizes
+     *    uneven VexFlow notehead/accidental spacing into a constant-velocity trajectory anchored at beat landmarks.
+     * 3. Enforces strict left-to-right monotonicity within each horizontal system row.
+     */
+    function stabilizeCursorStepCoordinates(cursorSteps, measureBounds, effZoom) {
+        if (!Array.isArray(cursorSteps) || cursorSteps.length === 0) return;
+
+        const fastStepTicks = Math.round(state.ticksPerWhole / 12);      // <= 16th notes / 16th triplets
+        const ultraFastStepTicks = Math.round(state.ticksPerWhole / 20); // <= 32nd & 64th notes / written-out trills
+        const beatWindowTicks = Math.round(state.ticksPerWhole / 4);     // 1 quarter-note beat window
+
+        // Process contiguous measure slices
+        let segStart = 0;
+        while (segStart < cursorSteps.length) {
+            const mIdx = cursorSteps[segStart].measureIndex;
+            let segEnd = segStart;
+            while (segEnd + 1 < cursorSteps.length && cursorSteps[segEnd + 1].measureIndex === mIdx) {
+                segEnd++;
+            }
+
+            const mSteps = cursorSteps.slice(segStart, segEnd + 1);
+            const mBounds = measureBounds[mIdx] || {
+                xPx: mSteps[0].x,
+                yPx: mSteps[0].y,
+                widthPx: 140,
+                heightPx: mSteps[0].height,
+                spanStartTicks: mSteps[0].ticks,
+                spanEndTicks: mSteps[mSteps.length - 1].ticks + beatWindowTicks,
+            };
+
+            const insetLeft = Math.min(mBounds.widthPx * 0.12, 14 * effZoom);
+            const defaultStartX = mBounds.xPx + insetLeft;
+            const defaultEndX = mBounds.xPx + Math.max(insetLeft + 4, mBounds.widthPx - 4 * effZoom);
+            const spanStart = mBounds.spanStartTicks;
+            const spanEnd = Math.max(spanStart + 1, mBounds.spanEndTicks);
+
+            // 1. Collect visible notehead anchors and make them monotonically non-decreasing
+            const visIndices = [];
+            let runningVisX = -Infinity;
+            for (let i = 0; i < mSteps.length; i++) {
+                const s = mSteps[i];
+                if (typeof s.rawVisibleX === 'number' && !Number.isNaN(s.rawVisibleX)) {
+                    if (s.rawVisibleX < runningVisX) {
+                        s.rawVisibleX = runningVisX;
+                    } else {
+                        runningVisX = s.rawVisibleX;
+                    }
+                    visIndices.push(i);
+                }
+            }
+
+            if (visIndices.length === 0) {
+                // Multi-measure rest or full-bar rest in visible parts: linear glide across measure
+                for (let i = 0; i < mSteps.length; i++) {
+                    const s = mSteps[i];
+                    const frac = Math.max(0, Math.min(1, (s.ticks - spanStart) / (spanEnd - spanStart)));
+                    s.x = defaultStartX + (defaultEndX - defaultStartX) * frac;
+                }
+            } else {
+                // Anchor-based interpolation for any step where only hidden parts have notes
+                const firstVisIdx = visIndices[0];
+                const firstVis = mSteps[firstVisIdx];
+                const leadStartX = Math.min(defaultStartX, firstVis.rawVisibleX);
+                for (let i = 0; i < firstVisIdx; i++) {
+                    const s = mSteps[i];
+                    const denom = Math.max(1, firstVis.ticks - spanStart);
+                    const frac = Math.max(0, Math.min(1, (s.ticks - spanStart) / denom));
+                    s.x = leadStartX + (firstVis.rawVisibleX - leadStartX) * frac;
+                }
+
+                for (let v = 0; v < visIndices.length; v++) {
+                    const curIdx = visIndices[v];
+                    const curStep = mSteps[curIdx];
+                    curStep.x = curStep.rawVisibleX;
+
+                    if (v + 1 < visIndices.length) {
+                        const nextIdx = visIndices[v + 1];
+                        const nextStep = mSteps[nextIdx];
+                        const denom = Math.max(1, nextStep.ticks - curStep.ticks);
+                        for (let i = curIdx + 1; i < nextIdx; i++) {
+                            const s = mSteps[i];
+                            const frac = Math.max(0, Math.min(1, (s.ticks - curStep.ticks) / denom));
+                            s.x = curStep.rawVisibleX + (nextStep.rawVisibleX - curStep.rawVisibleX) * frac;
+                        }
+                    }
+                }
+
+                const lastVisIdx = visIndices[visIndices.length - 1];
+                const lastVis = mSteps[lastVisIdx];
+                const tailEndX = Math.max(lastVis.rawVisibleX + 4 * effZoom, defaultEndX);
+                const tailDenom = Math.max(1, spanEnd - lastVis.ticks);
+                for (let i = lastVisIdx + 1; i < mSteps.length; i++) {
+                    const s = mSteps[i];
+                    const frac = Math.max(0, Math.min(1, (s.ticks - lastVis.ticks) / tailDenom));
+                    s.x = lastVis.rawVisibleX + (tailEndX - lastVis.rawVisibleX) * frac;
+                }
+            }
+
+            // 2. Sub-beat velocity regularization for rapid runs (16th/32nd/64th notes & written-out trills)
+            if (mSteps.length >= 3) {
+                let rStart = 0;
+                while (rStart < mSteps.length - 1) {
+                    if ((mSteps[rStart + 1].ticks - mSteps[rStart].ticks) > fastStepTicks) {
+                        rStart++;
+                        continue;
+                    }
+                    let rEnd = rStart + 1;
+                    while (
+                        rEnd + 1 < mSteps.length &&
+                        (mSteps[rEnd + 1].ticks - mSteps[rEnd].ticks) <= fastStepTicks
+                    ) {
+                        rEnd++;
+                    }
+
+                    if (rEnd - rStart >= 2) {
+                        // Select beat landmarks along the rapid run (every ~quarter note, plus endpoints)
+                        const anchors = [rStart];
+                        let lastAnchorTicks = mSteps[rStart].ticks;
+                        for (let i = rStart + 1; i < rEnd; i++) {
+                            const sinceLast = mSteps[i].ticks - lastAnchorTicks;
+                            const toEnd = mSteps[rEnd].ticks - mSteps[i].ticks;
+                            if (sinceLast >= beatWindowTicks && toEnd >= Math.round(beatWindowTicks * 0.5)) {
+                                anchors.push(i);
+                                lastAnchorTicks = mSteps[i].ticks;
+                            }
+                        }
+                        anchors.push(rEnd);
+
+                        // Lightly smooth interior beat landmarks so velocity doesn't kink at beat boundaries
+                        if (anchors.length >= 3) {
+                            const smoothedAnchorX = anchors.map((idx) => mSteps[idx].x);
+                            for (let a = 1; a < anchors.length - 1; a++) {
+                                const prevA = mSteps[anchors[a - 1]];
+                                const currA = mSteps[anchors[a]];
+                                const nextA = mSteps[anchors[a + 1]];
+                                const denom = Math.max(1, nextA.ticks - prevA.ticks);
+                                const frac = (currA.ticks - prevA.ticks) / denom;
+                                const interpAnchorX = prevA.x + (nextA.x - prevA.x) * frac;
+                                smoothedAnchorX[a] = currA.x * 0.65 + interpAnchorX * 0.35;
+                            }
+                            for (let a = 1; a < anchors.length - 1; a++) {
+                                mSteps[anchors[a]].x = smoothedAnchorX[a];
+                            }
+                        }
+
+                        // Piece-wise time-linear regularization between landmarks
+                        for (let a = 0; a < anchors.length - 1; a++) {
+                            const i0 = anchors[a];
+                            const i1 = anchors[a + 1];
+                            const s0 = mSteps[i0];
+                            const s1 = mSteps[i1];
+                            const segTicks = Math.max(1, s1.ticks - s0.ticks);
+                            const avgDt = segTicks / Math.max(1, i1 - i0);
+                            // 32nd/64th notes & trills get 94% constant-velocity regularization
+                            const linearWeight = avgDt <= ultraFastStepTicks ? 0.94 : 0.80;
+
+                            for (let i = i0 + 1; i < i1; i++) {
+                                const s = mSteps[i];
+                                const frac = Math.max(0, Math.min(1, (s.ticks - s0.ticks) / segTicks));
+                                const linearX = s0.x + (s1.x - s0.x) * frac;
+                                s.x = linearX * linearWeight + s.x * (1 - linearWeight);
+                            }
+                        }
+
+                        // Final local time-weighted smoothing pass across ultra-fast (32nd/64th/trill) interior steps
+                        const passX = mSteps.map((s) => s.x);
+                        for (let i = rStart + 1; i < rEnd; i++) {
+                            const dtPrev = mSteps[i].ticks - mSteps[i - 1].ticks;
+                            const dtNext = mSteps[i + 1].ticks - mSteps[i].ticks;
+                            if (dtPrev <= ultraFastStepTicks && dtNext <= ultraFastStepTicks && (dtPrev + dtNext) > 0) {
+                                const expectedX = mSteps[i - 1].x + (mSteps[i + 1].x - mSteps[i - 1].x) * (dtPrev / (dtPrev + dtNext));
+                                passX[i] = expectedX * 0.85 + mSteps[i].x * 0.15;
+                            }
+                        }
+                        for (let i = rStart + 1; i < rEnd; i++) {
+                            mSteps[i].x = passX[i];
+                        }
+                    }
+
+                    rStart = rEnd + 1;
+                }
+            }
+
+            // 3. Enforce strict monotonicity within the measure
+            for (let i = 1; i < mSteps.length; i++) {
+                if (mSteps[i].x < mSteps[i - 1].x) {
+                    mSteps[i].x = mSteps[i - 1].x;
+                }
+            }
+
+            segStart = segEnd + 1;
+        }
+
+        // 4. Enforce strict monotonicity across measure boundaries on the same horizontal system row
+        for (let i = 1; i < cursorSteps.length; i++) {
+            const prev = cursorSteps[i - 1];
+            const curr = cursorSteps[i];
+            if (Math.abs(curr.y - prev.y) < 10 && curr.x < prev.x) {
+                curr.x = prev.x;
+            }
+        }
+    }
+
+    /**
+     * Checks whether a SourceMeasure contains any non-rest notes in currently visible staves.
+     */
+    function sourceMeasureHasVisibleNotes(sm) {
+        if (!sm || !Array.isArray(sm.VerticalSourceStaffEntryContainers)) return false;
+        for (const container of sm.VerticalSourceStaffEntryContainers) {
+            if (!container || !Array.isArray(container.StaffEntries)) continue;
+            for (const se of container.StaffEntries) {
+                if (!se || !se.ParentStaff) continue;
+                const isStaffVisible = typeof se.ParentStaff.isVisible === 'function'
+                    ? se.ParentStaff.isVisible()
+                    : (se.ParentStaff.ParentInstrument?.Visible !== false);
+                if (!isStaffVisible || !Array.isArray(se.VoiceEntries)) continue;
+                for (const ve of se.VoiceEntries) {
+                    if (!ve || !Array.isArray(ve.Notes)) continue;
+                    for (const note of ve.Notes) {
+                        if (note && typeof note.isRest === 'function' && !note.isRest()) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Configures OSMD's multi-measure rest generator so that whenever a multi-bar rest precedes a measure
+     * where visible parts have notes again, the final bar of the rest is left expanded as a standalone 1-bar rest
+     * ("multi-bar rest minus one at the end"). This gives singers a full count-in bar before their entry.
+     */
+    function configureMultiRestMinusOneRule(osmd) {
+        const measures = osmd?.sheet?.SourceMeasures;
+        if (!Array.isArray(measures) || measures.length === 0) return;
+
+        for (let i = 0; i < measures.length; i++) {
+            const sm = measures[i];
+            if (!sm) continue;
+            if (typeof sm._origCanBeReducedToMultiRest !== 'function' && typeof sm.canBeReducedToMultiRest === 'function') {
+                sm._origCanBeReducedToMultiRest = sm.canBeReducedToMultiRest.bind(sm);
+            }
+            // Clear any static XML multi-rest flags so OSMD recalculates dynamically from visible parts
+            sm.multipleRestMeasures = 0;
+            sm.multipleRestMeasureNumber = 0;
+            sm.isReducedToMultiRest = false;
+        }
+
+        for (let i = 0; i < measures.length; i++) {
+            const sm = measures[i];
+            if (!sm || typeof sm._origCanBeReducedToMultiRest !== 'function') continue;
+
+            sm.canBeReducedToMultiRest = () => {
+                if (!sm._origCanBeReducedToMultiRest()) return false;
+                const nextSm = measures[i + 1];
+                if (nextSm) {
+                    const nextCannotReduce = typeof nextSm._origCanBeReducedToMultiRest === 'function'
+                        ? !nextSm._origCanBeReducedToMultiRest()
+                        : sourceMeasureHasVisibleNotes(nextSm);
+                    if (nextCannotReduce || sourceMeasureHasVisibleNotes(nextSm)) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+        }
+    }
+
+    /**
      * Rebuilds only the visual score & cursor coordinates after zoom, view mode, or part visibility re-render,
      * keeping Tone.Transport running 100% uninterrupted during active playback!
      */
@@ -1554,6 +1957,7 @@
         clearAllNoteHighlights();
         updateContinuousHorizontalPadding(true);
         syncOsmdInstrumentVisibility();
+        configureMultiRestMinusOneRule(state.osmd);
 
         state.osmd.setOptions({
             renderSingleHorizontalStaffline: state.continuousScrollMode,
@@ -1561,7 +1965,7 @@
         if (state.osmd.EngravingRules) {
             state.osmd.EngravingRules.RenderMeasureNumbers = false;
         }
-        state.osmd.zoom = state.zoom;
+        state.osmd.zoom = getEffectiveOsmdZoom();
         state.osmd.render();
 
         extractScoreData(true);
@@ -1643,48 +2047,46 @@
         if (targetIndex === state.currentStepIndex) return;
 
         const cursor = osmd.cursor;
-        if (targetIndex > state.currentStepIndex) {
-            const delta = targetIndex - state.currentStepIndex;
-            if (delta === 1) {
-                cursor.next();
-            } else {
-                // Temporarily suppress intermediate DOM updates for instant O(1)-DOM fast-forward
-                // while preserving 100% of OSMD's native cursor.next() traversal logic
-                const origUpdate = cursor.update;
-                cursor.update = () => { };
-                try {
-                    for (let i = 0; i < delta && !cursor.Iterator.EndReached; i++) {
-                        cursor.next();
-                    }
-                } finally {
-                    cursor.update = origUpdate;
+        const prevStep = state.cursorSteps[state.currentStepIndex];
+        const step = state.cursorSteps[targetIndex];
+        const cursorType = getCurrentCursorType();
+        const isMeasureCursor = cursorType === 3 || cursorType === 4;
+        // Only run OSMD's heavy <canvas>.toDataURL() cursor.update() when measure-box cursor is active
+        // or when the cursor moves to a system row with a different vertical position or height
+        const needsNativeCursorRedraw = isMeasureCursor ||
+            !prevStep ||
+            !step ||
+            Math.abs(step.y - prevStep.y) > 0.5 ||
+            Math.abs(step.height - prevStep.height) > 0.5;
+
+        const origUpdate = cursor.update;
+        cursor.update = () => { };
+        try {
+            if (targetIndex > state.currentStepIndex) {
+                const delta = targetIndex - state.currentStepIndex;
+                for (let i = 0; i < delta && !cursor.Iterator.EndReached; i++) {
+                    cursor.next();
                 }
-                cursor.update();
-            }
-        } else {
-            // Seeking backwards: reset and fast-forward silently, then update DOM ONCE
-            const origUpdate = cursor.update;
-            cursor.update = () => { };
-            try {
+            } else {
                 cursor.reset();
                 for (let i = 0; i < targetIndex && !cursor.Iterator.EndReached; i++) {
                     cursor.next();
                 }
-            } finally {
-                cursor.update = origUpdate;
             }
+        } finally {
+            cursor.update = origUpdate;
+        }
+
+        if (needsNativeCursorRedraw) {
             cursor.update();
         }
 
         ensureCursorZIndex();
         state.currentStepIndex = targetIndex;
 
-        // Enforce precomputed step (x, y) so compactified multi-measure rests never jump the cursor to (0, 0)
-        const step = state.cursorSteps[targetIndex];
+        // Enforce precomputed stabilized step (x, y) so compactified multi-measure rests and 32nd/64th trills stay smooth
         const cursorEl = cursor.cursorElement;
         if (cursorEl && step) {
-            const cursorType = getCurrentCursorType();
-            const isMeasureCursor = cursorType === 3 || cursorType === 4;
             if (!isMeasureCursor) {
                 cursorEl.style.left = `${step.x.toFixed(2)}px`;
             }
@@ -1701,8 +2103,8 @@
         const steps = state.cursorSteps;
         if (!box || !steps.length) return;
 
-        const stepIdx = state.currentStepIndex;
-        const curr = steps[stepIdx];
+        const stepIdx = state.isPlaying ? getStepIndexAtTicks(nowTicks) : state.currentStepIndex;
+        const curr = steps[stepIdx] || steps[state.currentStepIndex];
         if (!curr) return;
 
         // Smoothly interpolate playhead X across the score (including across multi-measure rests!) at 60fps+
@@ -1766,15 +2168,15 @@
                 }
             }
 
-            // Vertical scroll: ONLY auto-center vertically when a part is highlighted ('H')!
-            // When no part is highlighted, leave box.scrollTop completely untouched so mobile & desktop
+            // Vertical scroll: ONLY auto-center vertically when a part has Center ('C') selected!
+            // When no part is centered ('C'), leave box.scrollTop completely untouched so mobile & desktop
             // users can scroll vertically without ever rubberbanding back to the top.
-            if (state.highlightedStaffBands && state.highlightedStaffBands.length > 0) {
+            if (state.centeredStaffBands && state.centeredStaffBands.length > 0) {
                 updateVerticalCenteringForHighlight(snap, dt);
             }
         } else {
-            // Page View: if a part is highlighted, keep the active system's highlighted staff vertically centered
-            if (state.highlightedStaffBands && state.highlightedStaffBands.length > 0) {
+            // Page View: if a part has Center ('C') selected, keep the active system's centered staff vertically centered
+            if (state.centeredStaffBands && state.centeredStaffBands.length > 0) {
                 updateVerticalCenteringForHighlight(snap, dt);
                 return;
             }
@@ -1882,16 +2284,23 @@
         }
 
         // 4. Advance high-res floating-point ticks phase-locked to latency-compensated audibleTicks
+        // Uses a rate-clamped low-pass PLL so AudioContext buffer-quantum steps never cause micro-stutter
+        // on wide 32nd/64th-note or written-out trill bars
         const liveBpm = getEffectiveBpm();
         const ppq = state.ticksPerWhole / 4;
         const ticksPerSec = (liveBpm / 60) * ppq;
-        state.smoothTicks += dt * ticksPerSec;
+        const nominalDelta = dt * ticksPerSec;
+        const nextNominalTicks = state.smoothTicks + nominalDelta;
 
-        const drift = audibleTicks - state.smoothTicks;
-        if (Math.abs(drift) > ppq * 0.45) {
+        const drift = audibleTicks - nextNominalTicks;
+        if (Math.abs(drift) > ppq * 0.55) {
             state.smoothTicks = audibleTicks;
+            state.smoothedTickDrift = 0;
         } else {
-            state.smoothTicks += drift * Math.min(1, dt * 12);
+            state.smoothedTickDrift = (state.smoothedTickDrift || 0) * 0.85 + drift * 0.15;
+            const maxRateAdjust = nominalDelta * 0.12;
+            const rateCorrection = Math.max(-maxRateAdjust, Math.min(maxRateAdjust, state.smoothedTickDrift * dt * 4.5));
+            state.smoothTicks = nextNominalTicks + rateCorrection;
         }
         state.smoothTicks = Math.max(state.playbackStartTicks ?? 0, Math.min(state.totalMusicalTicks, state.smoothTicks));
 
@@ -2337,47 +2746,31 @@
         if (!dom.resetMixerBtn) return;
         const partList = Object.values(state.parts);
         const isModified = partList.some(
-            (p) => p.muted || p.soloed || p.highlighted || p.hidden || p.volume !== CONFIG.DEFAULT_PART_VOLUME || (p.detectedPatchId && p.patchId !== p.detectedPatchId)
+            (p) =>
+                p.muted ||
+                p.soloed ||
+                p.highlighted ||
+                p.centered ||
+                Boolean(p.hidden) !== Boolean(p.defaultHidden) ||
+                p.volume !== CONFIG.DEFAULT_PART_VOLUME ||
+                (p.detectedPatchId && p.patchId !== p.detectedPatchId)
         );
         dom.resetMixerBtn.hidden = !isModified;
     }
 
     /**
-     * Renders a bright yellow marker highlight across the staff (or staves) of any highlighted part.
-     * Works seamlessly in both Continuous View and multi-system Page View.
+     * Collects the vertical staff bands `{ leftPx, topPx, widthPx, heightPx, centerY }`
+     * for any visible parts matching `targetPartIds`.
      */
-    function renderStaffHighlights() {
-        const box = dom.scoreDisplayArea;
-        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
-        if (!inner) return;
-
-        let layer = inner.querySelector('.staff-highlight-layer');
-        const highlightedPartIds = new Set(
-            Object.values(state.parts)
-                .filter((p) => p.highlighted && !p.hidden)
-                .map((p) => p.id)
-        );
-
-        state.highlightedStaffBands = [];
-
-        if (!state.scoreLoaded || !state.osmd || highlightedPartIds.size === 0) {
-            if (layer) layer.remove();
-            updateVerticalCenteringForHighlight(true);
-            return;
-        }
-
-        if (!layer) {
-            layer = document.createElement('div');
-            layer.className = 'staff-highlight-layer';
-            inner.insertBefore(layer, inner.firstChild);
-        } else {
-            layer.innerHTML = '';
+    function collectStaffBandsForPartIds(targetPartIds) {
+        const bands = [];
+        if (!state.scoreLoaded || !state.osmd || !targetPartIds || targetPartIds.size === 0) {
+            return bands;
         }
 
         const osmd = state.osmd;
-        const unitToPx = 10 * state.zoom;
+        const unitToPx = 10 * getEffectiveOsmdZoom();
 
-        // Build lookup from OSMD Staff object and visible staff index to partId
         const staffToPartId = new Map();
         const staffIndexToPartId = [];
         if (osmd.sheet?.Instruments) {
@@ -2397,9 +2790,6 @@
             });
         }
 
-        const frag = document.createDocumentFragment();
-        let bandsAdded = 0;
-
         const pages = osmd.GraphicSheet?.MusicPages;
         if (Array.isArray(pages)) {
             for (const page of pages) {
@@ -2417,7 +2807,7 @@
                             (parentInst ? (parentInst.IdString || `part_${parentInst.Id ?? 0}`) : null) ||
                             staffIndexToPartId[sIdx];
 
-                        if (!partId || !highlightedPartIds.has(partId)) continue;
+                        if (!partId || !targetPartIds.has(partId)) continue;
 
                         const absPos = sl.PositionAndShape.AbsolutePosition;
                         const size = sl.PositionAndShape.Size;
@@ -2433,26 +2823,20 @@
                         const widthPx = (size.width + padXUnits * 2) * unitToPx;
                         const heightPx = (staffHeightUnits + padTopUnits + padBottomUnits) * unitToPx;
 
-                        const band = document.createElement('div');
-                        band.className = 'staff-marker-band';
-                        band.style.left = `${leftPx.toFixed(1)}px`;
-                        band.style.top = `${topPx.toFixed(1)}px`;
-                        band.style.width = `${widthPx.toFixed(1)}px`;
-                        band.style.height = `${heightPx.toFixed(1)}px`;
-                        frag.appendChild(band);
-                        state.highlightedStaffBands.push({
+                        bands.push({
+                            leftPx,
                             topPx,
+                            widthPx,
                             heightPx,
                             centerY: topPx + heightPx * 0.5,
                         });
-                        bandsAdded++;
                     }
                 }
             }
         }
 
         // Fallback via MeasureList if MusicSystems.StaffLines was unavailable
-        if (bandsAdded === 0 && Array.isArray(osmd.GraphicSheet?.MeasureList)) {
+        if (bands.length === 0 && Array.isArray(osmd.GraphicSheet?.MeasureList)) {
             const mList = osmd.GraphicSheet.MeasureList;
             const rowBounds = new Map();
             for (let mIdx = 0; mIdx < mList.length; mIdx++) {
@@ -2460,7 +2844,7 @@
                 if (!Array.isArray(col)) continue;
                 for (let sIdx = 0; sIdx < col.length; sIdx++) {
                     const partId = staffIndexToPartId[sIdx];
-                    if (!partId || !highlightedPartIds.has(partId)) continue;
+                    if (!partId || !targetPartIds.has(partId)) continue;
                     const gm = col[sIdx];
                     const absPos = gm?.PositionAndShape?.AbsolutePosition;
                     const size = gm?.PositionAndShape?.Size;
@@ -2477,30 +2861,86 @@
                 }
             }
             for (const b of rowBounds.values()) {
+                const leftPx = Math.max(0, (b.minX - 0.6) * unitToPx);
                 const topPx = Math.max(0, (b.y - 1.35) * unitToPx);
+                const widthPx = (b.maxX - b.minX + 1.2) * unitToPx;
                 const heightPx = (b.h + 2.7) * unitToPx;
-                const band = document.createElement('div');
-                band.className = 'staff-marker-band';
-                band.style.left = `${Math.max(0, (b.minX - 0.6) * unitToPx).toFixed(1)}px`;
-                band.style.top = `${topPx.toFixed(1)}px`;
-                band.style.width = `${((b.maxX - b.minX + 1.2) * unitToPx).toFixed(1)}px`;
-                band.style.height = `${heightPx.toFixed(1)}px`;
-                frag.appendChild(band);
-                state.highlightedStaffBands.push({
+                bands.push({
+                    leftPx,
                     topPx,
+                    widthPx,
                     heightPx,
                     centerY: topPx + heightPx * 0.5,
                 });
             }
         }
 
+        return bands;
+    }
+
+    /**
+     * Updates vertical centering bands for any part that has the 'C' (Center) button active.
+     */
+    function updateCenteredStaffBands(snap = true) {
+        const centeredPartIds = new Set(
+            Object.values(state.parts)
+                .filter((p) => p.centered && !p.hidden)
+                .map((p) => p.id)
+        );
+        state.centeredStaffBands = collectStaffBandsForPartIds(centeredPartIds);
+        updateVerticalCenteringForHighlight(snap);
+    }
+
+    /**
+     * Renders a bright yellow marker highlight across the staff (or staves) of any highlighted ('H') part.
+     * Note: Highlight ('H') does NOT vertically center the staff; the separate 'C' button controls vertical centering.
+     */
+    function renderStaffHighlights() {
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        let layer = inner.querySelector('.staff-highlight-layer');
+        const highlightedPartIds = new Set(
+            Object.values(state.parts)
+                .filter((p) => p.highlighted && !p.hidden)
+                .map((p) => p.id)
+        );
+
+        state.highlightedStaffBands = collectStaffBandsForPartIds(highlightedPartIds);
+
+        if (!state.scoreLoaded || !state.osmd || state.highlightedStaffBands.length === 0) {
+            if (layer) layer.remove();
+            updateCenteredStaffBands(true);
+            return;
+        }
+
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'staff-highlight-layer';
+            inner.insertBefore(layer, inner.firstChild);
+        } else {
+            layer.innerHTML = '';
+        }
+
+        const frag = document.createDocumentFragment();
+        for (const b of state.highlightedStaffBands) {
+            const band = document.createElement('div');
+            band.className = 'staff-marker-band';
+            band.style.left = `${b.leftPx.toFixed(1)}px`;
+            band.style.top = `${b.topPx.toFixed(1)}px`;
+            band.style.width = `${b.widthPx.toFixed(1)}px`;
+            band.style.height = `${b.heightPx.toFixed(1)}px`;
+            frag.appendChild(band);
+        }
+
         layer.appendChild(frag);
-        updateVerticalCenteringForHighlight(true);
+        updateCenteredStaffBands(true);
     }
 
     /**
      * Renders clear bar numbers above EVERY visible staff on every measure
-     * so the bar number is always visible on all staves (including when a single part is highlighted and centered).
+     * so the bar number is always visible on all staves.
      */
     function renderStaffBarNumbers() {
         const box = dom.scoreDisplayArea;
@@ -2525,8 +2965,9 @@
         const mList = osmd.GraphicSheet?.MeasureList;
         if (!Array.isArray(mList) || mList.length === 0) return;
 
-        const unitToPx = 10 * state.zoom;
-        const fontSizePx = Math.max(9, Math.round(10.5 * state.zoom));
+        const effZoom = getEffectiveOsmdZoom();
+        const unitToPx = 10 * effZoom;
+        const fontSizePx = Math.max(9, Math.round(11.5 * effZoom));
         const frag = document.createDocumentFragment();
 
         for (let mIdx = 0; mIdx < mList.length; mIdx++) {
@@ -2563,10 +3004,10 @@
 
     /**
      * Vertically centers the score in the viewport:
-     * - When a part is highlighted ('H'): centers that highlighted part's staff in the exact vertical middle.
-     * - Standard (no part highlighted): centers the whole score vertically in the viewport (using top padding
-     *   when the score fits inside the viewport, or initial centered scrollTop when taller than the viewport,
-     *   without rubberbanding during playback or manual mobile scrolling).
+     * - When a part has Center ('C') selected: centers that part's staff in the exact vertical middle.
+     * - Standard (no part has 'C' selected, even if a part is highlighted with 'H'): centers the whole score
+     *   vertically in the viewport (using top padding when the score fits inside the viewport, or initial centered
+     *   scrollTop when taller than the viewport, without rubberbanding during playback or manual mobile scrolling).
      */
     function updateVerticalCenteringForHighlight(snap = true, dt = 1 / 60, allowStandardScrollReset = true) {
         const box = dom.scoreDisplayArea;
@@ -2579,11 +3020,11 @@
         const halfH = viewportH * 0.5;
         const innerH = inner ? inner.offsetHeight : box.scrollHeight;
 
-        const bands = state.highlightedStaffBands;
+        const bands = state.centeredStaffBands;
         if (!bands || bands.length === 0) {
             track.style.paddingBottom = '0px';
 
-            // Standard unhighlighted vertical centering
+            // Standard un-centered vertical layout
             if (!state.continuousScrollMode && innerH > viewportH) {
                 track.style.paddingTop = '0px';
                 return;
@@ -2616,7 +3057,7 @@
             return;
         }
 
-        // Highlighted part ('H'): pick the highlighted staff band on the active system
+        // Centered part ('C'): pick the centered staff band on the active system
         const currStep = state.cursorSteps[state.currentStepIndex];
         let targetBand = bands[0];
         if (currStep && bands.length > 1) {
@@ -2808,6 +3249,36 @@
                 }
             });
 
+            const centerBtn = document.createElement('button');
+            centerBtn.className = `part-button center-btn${part.centered ? ' active' : ''}`;
+            centerBtn.textContent = 'C';
+            centerBtn.title = `Center ${part.name} staff vertically in the viewport`;
+            centerBtn.setAttribute('aria-pressed', String(Boolean(part.centered)));
+            centerBtn.addEventListener('click', () => {
+                const willCenter = !part.centered;
+                for (const p of Object.values(state.parts)) {
+                    p.centered = willCenter && p.id === part.id;
+                }
+                if (willCenter && part.hidden) {
+                    part.hidden = false;
+                    renderPartMixerUI();
+                    toast(`Centered & showing ${part.name} staff`);
+                    if (state.pendingVisibilityRaf) {
+                        cancelAnimationFrame(state.pendingVisibilityRaf);
+                    }
+                    state.pendingVisibilityRaf = requestAnimationFrame(() => {
+                        state.pendingVisibilityRaf = null;
+                        reRenderScorePreservingState();
+                    });
+                    return;
+                }
+                renderPartMixerUI();
+                updateCenteredStaffBands(true);
+                if (willCenter) {
+                    toast(`Centered ${part.name} staff vertically`);
+                }
+            });
+
             const visibilityBtn = document.createElement('button');
             visibilityBtn.className = `part-button visibility-btn${part.hidden ? ' is-hidden' : ''}`;
             visibilityBtn.title = part.hidden ? `Show ${part.name} in score` : `Hide ${part.name} from score`;
@@ -2825,6 +3296,9 @@
                     }
                 }
                 part.hidden = !part.hidden;
+                if (part.hidden && part.centered) {
+                    part.centered = false;
+                }
                 renderPartMixerUI();
                 toast(part.hidden ? `Hidden ${part.name} staff` : `Showing ${part.name} staff`);
                 if (state.pendingVisibilityRaf) {
@@ -2839,6 +3313,7 @@
             btnGroup.appendChild(muteBtn);
             btnGroup.appendChild(soloBtn);
             btnGroup.appendChild(highlightBtn);
+            btnGroup.appendChild(centerBtn);
             btnGroup.appendChild(visibilityBtn);
             headerRow.appendChild(titleWrap);
             headerRow.appendChild(btnGroup);
@@ -2931,6 +3406,8 @@
         state.cursorSteps = [];
         state.barData = [];
         state.metronomeBeats = [];
+        state.highlightedStaffBands = [];
+        state.centeredStaffBands = [];
         state.loopEnabled = false;
         setScoreControlsEnabled(false);
 
@@ -2977,7 +3454,9 @@
             if (osmd.EngravingRules) {
                 osmd.EngravingRules.RenderMeasureNumbers = false;
             }
-            osmd.zoom = state.zoom;
+            applyAutoHideKeyboardPartsOnLoad(osmd);
+            configureMultiRestMinusOneRule(osmd);
+            osmd.zoom = getEffectiveOsmdZoom();
             osmd.render();
 
             state.osmd = osmd;
@@ -3603,30 +4082,367 @@
     }
 
     // ===========================================
+    // INTERACTIVE ARROW-GUIDED APP TOUR
+    // ===========================================
+
+    const TOUR_STORAGE_KEY = 'pyp_tour_invite_dismissed_v1';
+    let tourActive = false;
+    let tourStepIndex = 0;
+    let tourInjectedPreviewParts = false;
+    let tourSwipeDemoTimer = null;
+
+    function isTourInviteDismissed() {
+        try {
+            return window.localStorage.getItem(TOUR_STORAGE_KEY) === '1';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function setTourInviteDismissed() {
+        try {
+            window.localStorage.setItem(TOUR_STORAGE_KEY, '1');
+        } catch (_) { /* ignore */ }
+        const banner = document.getElementById('tourInviteBanner');
+        if (banner) banner.hidden = true;
+    }
+
+    function ensureTourPreviewPartCards() {
+        if (state.scoreLoaded || Object.keys(state.parts).length > 0) return;
+        const wrapper = dom.partControlsContentWrapper;
+        if (!wrapper) return;
+
+        tourInjectedPreviewParts = true;
+        if (window.PYP_UX && typeof window.PYP_UX.setMixerExpanded === 'function') {
+            window.PYP_UX.setMixerExpanded(true);
+        }
+
+        const sampleParts = [
+            { name: 'Soprano', isVocal: true, highlighted: true, vol: 100 },
+            { name: 'Alto', isVocal: true, highlighted: false, vol: 70 },
+            { name: 'Tenor', isVocal: true, highlighted: false, vol: 70 },
+            { name: 'Bass', isVocal: true, highlighted: false, vol: 70 },
+            { name: 'Violin I', isVocal: false, highlighted: false, vol: 70 },
+            { name: 'Violin II', isVocal: false, highlighted: false, vol: 70 },
+            { name: 'Continuo', isVocal: false, highlighted: false, vol: 70 },
+        ];
+
+        wrapper.innerHTML = '';
+        if (dom.partCountBadge) {
+            dom.partCountBadge.textContent = String(sampleParts.length);
+            dom.partCountBadge.hidden = false;
+        }
+
+        const frag = document.createDocumentFragment();
+        sampleParts.forEach((sp, idx) => {
+            const card = document.createElement('div');
+            card.className = `part-control-entry${sp.highlighted ? ' is-highlighted' : ''}`;
+            if (idx === 0) card.id = 'tourPreviewFirstPartCard';
+            card.innerHTML = `
+                <div class="part-header-row">
+                    <div class="part-title-wrap">
+                        <span class="part-label">${sp.name}</span>
+                        ${sp.isVocal ? '<span class="part-role-tag">Vocal</span>' : ''}
+                    </div>
+                    <div class="part-btn-group">
+                        <button type="button" class="part-button mute-btn" tabindex="-1">M</button>
+                        <button type="button" class="part-button solo-btn" tabindex="-1">S</button>
+                        <button type="button" class="part-button highlight-btn${sp.highlighted ? ' active' : ''}" tabindex="-1">H</button>
+                        <button type="button" class="part-button center-btn${sp.highlighted ? ' active' : ''}" tabindex="-1">C</button>
+                        <button type="button" class="part-button visibility-btn" tabindex="-1">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="part-instrument-row">
+                    <select class="part-instrument-select" tabindex="-1"><option>Grand Piano</option><option>Smooth Wave</option></select>
+                </div>
+                <div class="part-volume-row">
+                    <input type="range" class="part-volume-slider" min="0" max="100" value="${sp.vol}" tabindex="-1">
+                    <span class="part-vol-value">${sp.vol}%</span>
+                </div>
+            `;
+            frag.appendChild(card);
+        });
+        wrapper.appendChild(frag);
+    }
+
+    function cleanupTourPreviewPartCards() {
+        if (tourSwipeDemoTimer) {
+            window.clearInterval(tourSwipeDemoTimer);
+            tourSwipeDemoTimer = null;
+        }
+        const swipePill = document.getElementById('tourSwipeHintPill');
+        if (swipePill) swipePill.hidden = true;
+
+        if (!tourInjectedPreviewParts) return;
+        tourInjectedPreviewParts = false;
+        if (!state.scoreLoaded && Object.keys(state.parts).length === 0) {
+            renderPartMixerUI();
+        }
+    }
+
+    function getTourSteps() {
+        return [
+            {
+                title: '1. Choose or Open a Score',
+                desc: 'Select a score directly from the Scores list, or click Open to load any MusicXML (.mxl, .musicxml, .xml) file from your device.',
+                getTarget: () => document.getElementById('welcomeScoresFolderSection') || document.getElementById('scoresFolderSelect') || dom.loadScoreButton,
+            },
+            {
+                title: '2. Playback, Bar Loop & Metronome',
+                desc: 'Play or pause (Space), step backward/forward bar by bar, toggle an A–B Bar Loop (L) to practice tricky sections, or switch on the Metronome (M).',
+                getTarget: () => document.querySelector('.toolbar-center'),
+            },
+            {
+                title: '3. Click Notes & Scrub by Bar',
+                desc: 'Click any note in the sheet music to hear its pitch and play from that exact beat, or drag this Bar Timeline slider to jump to any bar.',
+                getTarget: () => document.querySelector('.timeline-row'),
+            },
+            {
+                title: '4. Live Tempo & Instrument Sounds',
+                desc: 'Adjust playback Tempo from 25% to 200% live without stopping, and choose between Grand Piano and Smooth Wave (a clear sustained tone for singing).',
+                getTarget: () => document.querySelector('.tempo-pill') || document.querySelector('.audio-controls-row'),
+            },
+            {
+                title: '5. Highlight (H), Center (C), Mute (M), Solo (S) & Hide (👁)',
+                desc: 'Tap H (Highlight) to mark your staff in yellow and set its volume to 100% (others to 70%). Tap C (Center) to lock your staff in the vertical center of the screen, M to mute, S to solo, or the Eye icon to hide staves.',
+                onEnter: () => {
+                    ensureTourPreviewPartCards();
+                    if (window.PYP_UX && typeof window.PYP_UX.setMixerExpanded === 'function') {
+                        window.PYP_UX.setMixerExpanded(true);
+                    }
+                    if (dom.partControlsContentWrapper) {
+                        dom.partControlsContentWrapper.scrollLeft = 0;
+                    }
+                },
+                getTarget: () => document.querySelector('.part-control-entry') || dom.partControlsContentWrapper,
+            },
+            {
+                title: '6. Swipe Sideways for More Parts!',
+                desc: 'Important on mobile & multi-part scores: not all parts fit on screen at once—extra parts are off-screen to the right. Swipe left and right across the part cards to reach every part!',
+                isSwipeStep: true,
+                onEnter: () => {
+                    ensureTourPreviewPartCards();
+                    if (window.PYP_UX && typeof window.PYP_UX.setMixerExpanded === 'function') {
+                        window.PYP_UX.setMixerExpanded(true);
+                    }
+                    const wrapper = dom.partControlsContentWrapper;
+                    if (wrapper) {
+                        let dir = 1;
+                        wrapper.scrollTo({ left: Math.min(180, wrapper.scrollWidth - wrapper.clientWidth), behavior: 'smooth' });
+                        tourSwipeDemoTimer = window.setInterval(() => {
+                            if (!wrapper) return;
+                            const maxScroll = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+                            const targetX = dir > 0 ? Math.min(200, maxScroll) : 0;
+                            wrapper.scrollTo({ left: targetX, behavior: 'smooth' });
+                            dir *= -1;
+                        }, 1500);
+                    }
+                },
+                getTarget: () => dom.partControlsContentWrapper || document.getElementById('partControlsBar'),
+            },
+            {
+                title: '7. View Mode, Zoom, Pitch & Home',
+                desc: 'Switch between smooth Continuous panning and Page view, zoom in/out, toggle 440Hz / 415Hz Baroque pitch, and click the PYP logo on the top-left anytime to return to the home screen.',
+                getTarget: () => document.querySelector('.toolbar-right') || dom.brandHomeBtn,
+            },
+        ];
+    }
+
+    function positionTourStep() {
+        if (!tourActive) return;
+        const steps = getTourSteps();
+        const step = steps[tourStepIndex];
+        if (!step) return;
+
+        const overlay = document.getElementById('tourOverlay');
+        const spotlight = document.getElementById('tourSpotlight');
+        const popover = document.getElementById('tourPopover');
+        const arrow = document.getElementById('tourArrow');
+        const swipePill = document.getElementById('tourSwipeHintPill');
+        const badgeEl = document.getElementById('tourStepBadge');
+        const titleEl = document.getElementById('tourStepTitle');
+        const descEl = document.getElementById('tourStepDesc');
+        const prevBtn = document.getElementById('tourPrevBtn');
+        const nextBtn = document.getElementById('tourNextBtn');
+
+        if (!overlay || !spotlight || !popover || !arrow) return;
+
+        badgeEl.textContent = `Step ${tourStepIndex + 1} of ${steps.length}`;
+        titleEl.textContent = step.title;
+        descEl.textContent = step.desc;
+        prevBtn.disabled = tourStepIndex === 0;
+        nextBtn.textContent = tourStepIndex === steps.length - 1 ? 'Finish' : 'Next';
+
+        const target = step.getTarget && step.getTarget();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const pad = 6;
+
+        let rect = target ? target.getBoundingClientRect() : null;
+        if (!rect || (rect.width === 0 && rect.height === 0)) {
+            rect = { top: vh * 0.4, left: vw * 0.3, width: vw * 0.4, height: 60, bottom: vh * 0.4 + 60, right: vw * 0.7 };
+        }
+
+        const spotTop = Math.max(4, rect.top - pad);
+        const spotLeft = Math.max(4, rect.left - pad);
+        const spotWidth = Math.min(vw - spotLeft - 4, rect.width + pad * 2);
+        const spotHeight = Math.min(vh - spotTop - 4, rect.height + pad * 2);
+
+        spotlight.style.top = `${spotTop}px`;
+        spotlight.style.left = `${spotLeft}px`;
+        spotlight.style.width = `${spotWidth}px`;
+        spotlight.style.height = `${spotHeight}px`;
+
+        // Show animated swipe badge right on the Part Mixer row during Step 6
+        if (swipePill) {
+            if (step.isSwipeStep) {
+                swipePill.hidden = false;
+                swipePill.style.left = `${spotLeft + spotWidth * 0.5}px`;
+                swipePill.style.top = `${Math.max(12, spotTop + spotHeight * 0.5 - 16)}px`;
+            } else {
+                swipePill.hidden = true;
+            }
+        }
+
+        // Measure popover dimensions
+        const popRect = popover.getBoundingClientRect();
+        const popW = popRect.width || Math.min(340, vw - 24);
+        const popH = popRect.height || 180;
+
+        const targetCenterX = spotLeft + spotWidth * 0.5;
+        const spaceAbove = spotTop;
+        const spaceBelow = vh - (spotTop + spotHeight);
+
+        // Place popover below target if target is in top half or more room below; otherwise place above target
+        const placeBelow = spaceBelow >= popH + 28 || spaceBelow > spaceAbove;
+
+        let popTop;
+        if (placeBelow) {
+            popTop = Math.min(vh - popH - 12, spotTop + spotHeight + 22);
+            arrow.className = 'tour-arrow arrow-top';
+        } else {
+            popTop = Math.max(12, spotTop - popH - 22);
+            arrow.className = 'tour-arrow arrow-bottom';
+        }
+
+        const popLeft = Math.max(12, Math.min(vw - popW - 12, targetCenterX - popW * 0.5));
+        popover.style.top = `${Math.round(popTop)}px`;
+        popover.style.left = `${Math.round(popLeft)}px`;
+
+        // Aim arrow directly at targetCenterX
+        const arrowLeft = Math.max(16, Math.min(popW - 52, targetCenterX - popLeft - 18));
+        arrow.style.left = `${Math.round(arrowLeft)}px`;
+    }
+
+    function goToTourStep(newIndex) {
+        if (tourSwipeDemoTimer) {
+            window.clearInterval(tourSwipeDemoTimer);
+            tourSwipeDemoTimer = null;
+        }
+        const steps = getTourSteps();
+        if (newIndex < 0 || newIndex >= steps.length) {
+            endGuidedTour();
+            return;
+        }
+        tourStepIndex = newIndex;
+        const step = steps[tourStepIndex];
+        if (typeof step.onEnter === 'function') {
+            step.onEnter();
+        }
+        requestAnimationFrame(() => {
+            positionTourStep();
+        });
+    }
+
+    function startGuidedTour() {
+        setTourInviteDismissed();
+        const overlay = document.getElementById('tourOverlay');
+        if (!overlay) return;
+        tourActive = true;
+        overlay.hidden = false;
+        goToTourStep(0);
+    }
+
+    function endGuidedTour() {
+        tourActive = false;
+        const overlay = document.getElementById('tourOverlay');
+        if (overlay) overlay.hidden = true;
+        cleanupTourPreviewPartCards();
+        setTourInviteDismissed();
+    }
+
+    function initGuidedTourControls() {
+        const prevBtn = document.getElementById('tourPrevBtn');
+        const nextBtn = document.getElementById('tourNextBtn');
+        const skipBtn = document.getElementById('tourSkipBtn');
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => goToTourStep(tourStepIndex - 1));
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => goToTourStep(tourStepIndex + 1));
+        }
+        if (skipBtn) {
+            skipBtn.addEventListener('click', () => endGuidedTour());
+        }
+
+        window.addEventListener('resize', () => {
+            if (tourActive) positionTourStep();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (!tourActive) return;
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                endGuidedTour();
+            } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                e.preventDefault();
+                goToTourStep(tourStepIndex + 1);
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (tourStepIndex > 0) goToTourStep(tourStepIndex - 1);
+            }
+        });
+    }
+
+    // ===========================================
     // EVENT LISTENERS
     // ===========================================
 
     function bindWelcomeScreenActions() {
         const welcomeOpenBtn = document.getElementById('welcomeOpenBtn');
-        const demoChoraleBtn = document.getElementById('loadDemoScoreBtn');
-        const demoEnsembleBtn = document.getElementById('loadDemoEnsembleBtn');
+        const welcomeStartTourBtn = document.getElementById('welcomeStartTourBtn');
+        const tourInviteBanner = document.getElementById('tourInviteBanner');
+        const tourInviteStartBtn = document.getElementById('tourInviteStartBtn');
+        const tourInviteDismissBtn = document.getElementById('tourInviteDismissBtn');
 
+        if (tourInviteBanner) {
+            tourInviteBanner.hidden = isTourInviteDismissed();
+        }
+        if (tourInviteStartBtn) {
+            tourInviteStartBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                startGuidedTour();
+            });
+        }
+        if (tourInviteDismissBtn) {
+            tourInviteDismissBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setTourInviteDismissed();
+            });
+        }
+        if (welcomeStartTourBtn) {
+            welcomeStartTourBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                startGuidedTour();
+            });
+        }
         if (welcomeOpenBtn) {
             welcomeOpenBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (dom.fileInput) dom.fileInput.click();
-            });
-        }
-        if (demoChoraleBtn) {
-            demoChoraleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                loadMusicXMLContent(getDemoChoraleMusicXML(), 'Chorale in C Major (SATB)');
-            });
-        }
-        if (demoEnsembleBtn) {
-            demoEnsembleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                loadMusicXMLContent(getDemoEnsembleMusicXML(), 'Quartet in G Major (Fl/Ob/Vln/Vc)');
             });
         }
         renderScoresFolderUI();
@@ -3660,6 +4476,7 @@
         state.barData = [];
         state.metronomeBeats = [];
         state.highlightedStaffBands = [];
+        state.centeredStaffBands = [];
         state.totalMusicalTicks = 0;
         state.currentTicks = 0;
         state.smoothTicks = 0;
@@ -3749,6 +4566,7 @@
         }
 
         bindWelcomeScreenActions();
+        initGuidedTourControls();
         discoverScoresFolderOverHttp();
 
         // Drag & Drop support
@@ -4069,17 +4887,18 @@
                 state.soundPreset = 'piano';
                 if (dom.soundSelect) dom.soundSelect.value = 'piano';
 
-                const anyWasHidden = Object.values(state.parts).some((p) => p.hidden);
+                const anyVisibilityChanged = Object.values(state.parts).some((p) => Boolean(p.hidden) !== Boolean(p.defaultHidden));
                 for (const part of Object.values(state.parts)) {
                     part.volume = CONFIG.DEFAULT_PART_VOLUME;
                     part.muted = false;
                     part.soloed = false;
                     part.highlighted = false;
-                    part.hidden = false;
+                    part.centered = false;
+                    part.hidden = Boolean(part.defaultHidden);
                     part.patchId = part.detectedPatchId || 'piano';
                 }
                 syncGlobalSoundSelectUI();
-                if (anyWasHidden) {
+                if (anyVisibilityChanged) {
                     reRenderScorePreservingState();
                 } else {
                     renderPartMixerUI();
@@ -4123,6 +4942,7 @@
 
         // MuseScore-Style Keyboard Shortcuts
         document.addEventListener('keydown', (e) => {
+            if (tourActive) return;
             const activeEl = document.activeElement;
             const tag = activeEl?.tagName;
             const isTextInput = tag === 'TEXTAREA' ||

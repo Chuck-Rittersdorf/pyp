@@ -150,11 +150,23 @@
         </div>
     </header>
 
-    <!-- Main Score Viewport -->
+        <!-- Main Score Viewport -->
     <main class="score-workspace" id="scoreWorkspace">
         <div class="score-display-box" id="scoreDisplayArea" tabindex="0" aria-label="Sheet music display">
             <div class="empty-state" id="scorePlaceholder">
                 <div class="empty-state-card">
+                    <!-- First-Load Optional Guided Tour Prompt -->
+                    <div class="tour-invite-banner" id="tourInviteBanner">
+                        <div class="tour-invite-text">
+                            <strong>First time here?</strong>
+                            <span>Take a quick tour of the controls &amp; part mixer.</span>
+                        </div>
+                        <div class="tour-invite-actions">
+                            <button type="button" class="tour-invite-btn tour-invite-start" id="tourInviteStartBtn">Start Tour</button>
+                            <button type="button" class="tour-invite-btn tour-invite-dismiss" id="tourInviteDismissBtn" aria-label="Dismiss tour">Skip</button>
+                        </div>
+                    </div>
+
                     <div class="empty-state-icon" aria-hidden="true">
                         <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M18 36V12l20-4v24"></path>
@@ -162,8 +174,11 @@
                             <circle cx="33" cy="32" r="5"></circle>
                         </svg>
                     </div>
-                    <h2>Prepare Your Part</h2>
-                    <p>Drop a MusicXML (<code>.xml</code>, <code>.musicxml</code>, <code>.mxl</code>) score anywhere here, or open a file to begin practicing.</p>
+                    <p>Select a score below, drop a MusicXML (<code>.xml</code>, <code>.musicxml</code>, <code>.mxl</code>) file anywhere here, or open a file from your device.</p>
+                    <div class="scores-folder-section" id="welcomeScoresFolderSection">
+                        <div class="scores-folder-heading">Scores</div>
+                        <div class="scores-folder-list" id="welcomeScoresFolderList"></div>
+                    </div>
                     <div class="empty-state-actions">
                         <button class="cta-btn cta-primary" id="welcomeOpenBtn">
                             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -171,22 +186,13 @@
                             </svg>
                             Open Score File
                         </button>
-                        <button class="cta-btn cta-secondary" id="loadDemoScoreBtn" title="Loads SATB Chorale — Singers automatically play on Grand Piano">
-                            <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-                                <path d="M8 5v14l11-7z"></path>
+                        <button class="cta-btn cta-secondary" id="welcomeStartTourBtn" type="button" title="Start a guided tour of PYP">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                             </svg>
-                            SATB Chorale (Singers → Piano)
+                            Take a Tour
                         </button>
-                        <button class="cta-btn cta-secondary" id="loadDemoEnsembleBtn" title="Loads Classical Quartet — Flute, Oboe, Violin &amp; Cello">
-                            <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-                                <path d="M8 5v14l11-7z"></path>
-                            </svg>
-                            Classical Quartet (Fl/Ob/Vln/Vc)
-                        </button>
-                    </div>
-                    <div class="scores-folder-section" id="welcomeScoresFolderSection">
-                        <div class="scores-folder-heading">Scores Folder</div>
-                        <div class="scores-folder-list" id="welcomeScoresFolderList"></div>
                     </div>
                     <div class="quick-tips">
                         <span><kbd>Space</kbd> Play/Pause</span>
@@ -332,6 +338,36 @@
                 <div class="shortcut-item"><kbd>+</kbd> / <kbd>-</kbd><span>Zoom In / Out</span></div>
                 <div class="shortcut-item"><kbd>0</kbd><span>Reset Zoom (100%)</span></div>
                 <div class="shortcut-item"><kbd>Click Score</kbd><span>Jump cursor to beat</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Guided Tour Overlay -->
+    <div class="tour-overlay" id="tourOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="tourStepTitle">
+        <div class="tour-spotlight" id="tourSpotlight"></div>
+        <div class="tour-swipe-hint-pill" id="tourSwipeHintPill" hidden>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="7 8 3 12 7 16"></polyline>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <polyline points="17 8 21 12 17 16"></polyline>
+            </svg>
+            <span>Swipe left &amp; right to reach off-screen parts</span>
+        </div>
+        <div class="tour-popover" id="tourPopover">
+            <div class="tour-arrow" id="tourArrow" aria-hidden="true">
+                <svg viewBox="0 0 36 22" width="36" height="22">
+                    <path d="M18 2 L32 20 L4 20 Z" fill="currentColor"></path>
+                </svg>
+            </div>
+            <div class="tour-popover-header">
+                <span class="tour-step-badge" id="tourStepBadge">Step 1 of 7</span>
+                <button type="button" class="tour-close-btn" id="tourSkipBtn" title="Close tour" aria-label="Close tour">Skip</button>
+            </div>
+            <h4 class="tour-step-title" id="tourStepTitle">Welcome to PYP</h4>
+            <p class="tour-step-desc" id="tourStepDesc"></p>
+            <div class="tour-popover-footer">
+                <button type="button" class="tour-nav-btn tour-prev-btn" id="tourPrevBtn">Back</button>
+                <button type="button" class="tour-nav-btn tour-next-btn" id="tourNextBtn">Next</button>
             </div>
         </div>
     </div>

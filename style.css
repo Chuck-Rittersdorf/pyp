@@ -1395,6 +1395,12 @@ kbd {
     color: #1E293B;
 }
 
+.part-button.center-btn.active {
+    background: #0284C7;
+    border-color: #0369A1;
+    color: #FFFFFF;
+}
+
 .part-button.visibility-btn.is-hidden {
     background: #475569;
     border-color: #334155;
@@ -1513,6 +1519,272 @@ kbd {
 
 .toast-item.toast-success {
     background: #0F766E;
+}
+
+/* ===========================================
+   FIRST-LOAD TOUR INVITE & INTERACTIVE GUIDED TOUR
+   =========================================== */
+
+.tour-invite-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    border: 1px solid rgba(2, 136, 209, 0.32);
+    text-align: left;
+}
+
+.tour-invite-banner[hidden] {
+    display: none !important;
+}
+
+.tour-invite-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12.5px;
+    color: var(--text-primary);
+}
+
+.tour-invite-text strong {
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.tour-invite-text span {
+    color: var(--text-secondary);
+}
+
+.tour-invite-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.tour-invite-btn {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.tour-invite-start {
+    background: var(--accent);
+    color: #FFFFFF;
+    border: 1px solid var(--accent);
+}
+
+.tour-invite-start:hover {
+    background: var(--accent-hover);
+}
+
+.tour-invite-dismiss {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+}
+
+.tour-invite-dismiss:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    pointer-events: auto;
+}
+
+.tour-overlay[hidden] {
+    display: none !important;
+}
+
+.tour-spotlight {
+    position: fixed;
+    border-radius: 10px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.58), 0 0 0 3px #0288D1, 0 0 20px rgba(2, 136, 209, 0.55);
+    pointer-events: none;
+    transition: top 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                left 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                width 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                height 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tour-popover {
+    position: fixed;
+    width: min(340px, calc(100vw - 24px));
+    background: #FFFFFF;
+    color: var(--text-primary);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--accent);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.32);
+    padding: 15px 16px 14px;
+    z-index: 202;
+    transition: top 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                left 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tour-arrow {
+    position: absolute;
+    width: 36px;
+    height: 22px;
+    color: var(--accent);
+    pointer-events: none;
+    filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.16));
+}
+
+.tour-arrow.arrow-top {
+    top: -21px;
+    animation: tour-bounce-up 1s ease-in-out infinite;
+}
+
+.tour-arrow.arrow-bottom {
+    bottom: -21px;
+    transform: rotate(180deg);
+    animation: tour-bounce-down 1s ease-in-out infinite;
+}
+
+@keyframes tour-bounce-up {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes tour-bounce-down {
+    0%, 100% { transform: rotate(180deg) translateY(0); }
+    50% { transform: rotate(180deg) translateY(-5px); }
+}
+
+.tour-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.tour-step-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+.tour-close-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.tour-close-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+}
+
+.tour-step-title {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.tour-step-desc {
+    margin: 0 0 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.tour-popover-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tour-nav-btn {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.tour-prev-btn {
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+}
+
+.tour-prev-btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.tour-prev-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.tour-next-btn {
+    background: var(--accent);
+    color: #FFFFFF;
+    border: 1px solid var(--accent);
+    margin-left: auto;
+}
+
+.tour-next-btn:hover {
+    background: var(--accent-hover);
+}
+
+.tour-swipe-hint-pill {
+    position: fixed;
+    z-index: 203;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: var(--radius-pill);
+    background: #0F172A;
+    color: #FACC15;
+    border: 1.5px solid #FACC15;
+    font-size: 12.5px;
+    font-weight: 700;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35);
+    pointer-events: none;
+    white-space: nowrap;
+    animation: tour-swipe-oscillate 1.4s ease-in-out infinite;
+}
+
+.tour-swipe-hint-pill[hidden] {
+    display: none !important;
+}
+
+@keyframes tour-swipe-oscillate {
+    0%, 100% { transform: translate(-50%, 0); }
+    25% { transform: translate(calc(-50% - 14px), 0); }
+    75% { transform: translate(calc(-50% + 14px), 0); }
 }
 
 /* ===========================================
