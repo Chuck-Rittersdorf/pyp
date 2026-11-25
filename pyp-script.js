@@ -1051,6 +1051,27 @@
         }
     }
 
+    /**
+     * Reuses the already-built Tone.Part instances on seek/skip (<0.1ms) instead of disposing and
+     * rebuilding 15,000+ timeline events (which previously blocked the main thread for 150-350ms).
+     */
+    function ensureTonePartsScheduled() {
+        if (!state.playbackPart) {
+            scheduleToneParts();
+            return;
+        }
+        try {
+            state.playbackPart.stop(0);
+            state.playbackPart.start(0);
+            if (state.metronomePart) {
+                state.metronomePart.stop(0);
+                state.metronomePart.start(0);
+            }
+        } catch (_) {
+            scheduleToneParts();
+        }
+    }
+
     // ===========================================
     // OSMD SCORE EXTRACTION & CURSOR STEP MAP
     // ===========================================
@@ -1695,6 +1716,7 @@
         renderStaffHighlights();
         renderStaffBarNumbers();
         renderStaffStartPartPointers();
+        renderMultiRestSkipPointers();
 
         // Schedule audio parts only on initial score load (never interrupt active playback on visual re-render!)
         if (state.audioInitialized && !canFastRebuild) {
@@ -2129,6 +2151,7 @@
         renderStaffHighlights();
         renderStaffBarNumbers();
         renderStaffStartPartPointers();
+        renderMultiRestSkipPointers();
 
         const liveTicks = state.isPlaying ? state.smoothTicks : state.currentTicks;
         updateCameraForTicks(liveTicks, 0, true, false);
@@ -2254,6 +2277,7 @@
         if (state.isPlaying) {
             highlightStepNotes(targetIndex);
         }
+        updateActiveMultiRestSkipVisibility(false);
     }
 
     function updateCameraForTicks(nowTicks, dt, snap = false, keepViewport = false) {
@@ -2508,6 +2532,9 @@
             window.clearTimeout(state.auditionRestoreTimer);
             state.auditionRestoreTimer = null;
         }
+
+        // 1. Pause transport & silence ringing notes immediately
+        Tone.Transport.pause();
         releaseAllInstruments();
         clearAllNoteHighlights();
 
@@ -2518,13 +2545,13 @@
             updateTempoReadoutUI();
         }
 
-        // Pause -> set exact ticks -> rebuild fresh Tone.Part (so backward & forward jumps always trigger!) -> start immediately
-        Tone.Transport.pause();
-        Tone.Transport.ticks = targetTicks;
+        // 2. Reuse existing Tone.Part in <0.1ms and complete all cursor/DOM updates BEFORE restarting the audio clock
+        ensureTonePartsScheduled();
+
         state.currentTicks = targetTicks;
         state.smoothTicks = targetTicks;
         state.playbackStartTicks = targetTicks;
-        scheduleToneParts();
+        state.smoothedTickDrift = 0;
 
         const targetStep = getStepIndexAtTicks(targetTicks);
         moveCursorToStep(targetStep);
@@ -2539,7 +2566,10 @@
         }
         updateTimelineReadout(targetTicks);
 
-        Tone.Transport.start();
+        // 3. Lock exact tick and restart transport at Tone.now() so zero musical time is lost during the jump
+        state.lastFrameTime = performance.now();
+        Tone.Transport.ticks = targetTicks;
+        Tone.Transport.start(Tone.now());
     }
 
     // ===========================================
@@ -2596,14 +2626,16 @@
         updateTimelineReadout(startTicks);
 
         Tone.Transport.pause();
-        Tone.Transport.ticks = startTicks;
-        scheduleToneParts();
-        Tone.Transport.start();
+        ensureTonePartsScheduled();
+        highlightStepNotes(state.currentStepIndex);
 
         state.isPlaying = true;
-        state.lastFrameTime = 0;
-        highlightStepNotes(state.currentStepIndex);
+        state.smoothedTickDrift = 0;
+        state.lastFrameTime = performance.now();
         updatePlayPauseButtonUI();
+
+        Tone.Transport.ticks = startTicks;
+        Tone.Transport.start(Tone.now());
 
         if (state.rafId) cancelAnimationFrame(state.rafId);
         state.rafId = requestAnimationFrame(playbackFrameLoop);
@@ -3180,6 +3212,186 @@
     }
 
     /**
+     * Renders an interactive "Click to skip ahead ↓" arrow badge above the count-in bar
+     * at the end of every compactified multi-measure rest so users know they can click
+     * that bar (or the arrow badge itself) to skip straight to the bar before the entry.
+     */
+    function renderMultiRestSkipPointers() {
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        let layer = inner.querySelector('.multirest-skip-layer');
+        if (!state.scoreLoaded || !state.osmd) {
+            if (layer) layer.remove();
+            return;
+        }
+
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'multirest-skip-layer';
+            inner.appendChild(layer);
+        } else {
+            layer.innerHTML = '';
+        }
+
+        const osmd = state.osmd;
+        const mList = osmd.GraphicSheet?.MeasureList;
+        if (!Array.isArray(mList) || mList.length === 0) return;
+
+        const effZoom = getEffectiveOsmdZoom();
+        const unitToPx = 10 * effZoom;
+
+        // Map visible staff index -> partId so we can place the badge on the top visible staff
+        // plus any currently highlighted ('H') or centered ('C') part's staff
+        const staffIndexToPartId = [];
+        if (osmd.sheet?.Instruments) {
+            osmd.sheet.Instruments.forEach((inst, instIdx) => {
+                const pid = inst.IdString || `part_${inst.Id ?? instIdx}`;
+                if (inst.Visible === false) return;
+                if (Array.isArray(inst.Staves) && inst.Staves.length > 0) {
+                    for (let i = 0; i < inst.Staves.length; i++) {
+                        staffIndexToPartId.push(pid);
+                    }
+                } else {
+                    staffIndexToPartId.push(pid);
+                }
+            });
+        }
+
+        const targetStaffIndices = new Set([0]);
+        for (let sIdx = 0; sIdx < staffIndexToPartId.length; sIdx++) {
+            const pid = staffIndexToPartId[sIdx];
+            const p = state.parts[pid];
+            if (p && !p.hidden && (p.highlighted || p.centered)) {
+                targetStaffIndices.add(sIdx);
+            }
+        }
+
+        const frag = document.createDocumentFragment();
+
+        for (let mIdx = 0; mIdx < mList.length; mIdx++) {
+            const col = mList[mIdx];
+            if (!Array.isArray(col)) continue;
+
+            let multiRestCount = osmd.sheet?.SourceMeasures?.[mIdx]?.multipleRestMeasures || 0;
+            let hasVisibleHead = false;
+            for (let sIdx = 0; sIdx < col.length; sIdx++) {
+                const gm = col[sIdx];
+                if (!gm || gm.isReducedToMultiRest) continue;
+                hasVisibleHead = true;
+                if (gm.multipleRestMeasures > multiRestCount) {
+                    multiRestCount = gm.multipleRestMeasures;
+                }
+            }
+
+            if (!hasVisibleHead || multiRestCount <= 1) continue;
+
+            // The -1 bar right at the end of the multi-measure rest (the 1-bar count-in rest before notes resume)
+            const targetMeasureIdx = mIdx + multiRestCount;
+            if (targetMeasureIdx >= mList.length) continue;
+
+            const targetCol = mList[targetMeasureIdx];
+            const targetBar = state.barData[targetMeasureIdx];
+            if (!Array.isArray(targetCol) || !targetBar) continue;
+
+            // Find the exact cursor X and tick of Beat 1 (the beginning) of the -1 bar
+            const firstBeatStepIdx = getStepIndexAtTicks(targetBar.startTicks);
+            const firstBeatStep = state.cursorSteps[firstBeatStepIdx];
+            const firstBeatTicks = (firstBeatStep && firstBeatStep.measureIndex === targetMeasureIdx)
+                ? firstBeatStep.ticks
+                : targetBar.startTicks;
+
+            for (const sIdx of targetStaffIndices) {
+                const targetGm = targetCol[sIdx];
+                if (!targetGm || targetGm.isReducedToMultiRest) continue;
+
+                const absPos = targetGm.PositionAndShape?.AbsolutePosition;
+                const size = targetGm.PositionAndShape?.Size;
+                if (!absPos || !size || !(size.width > 0.01) || typeof absPos.x !== 'number' || typeof absPos.y !== 'number') continue;
+
+                const barLeftPx = absPos.x * unitToPx;
+                const insetLeft = Math.min((size.width * unitToPx) * 0.12, 14 * effZoom);
+                const firstBeatX = (firstBeatStep && firstBeatStep.measureIndex === targetMeasureIdx && firstBeatStep.x >= barLeftPx - 4)
+                    ? firstBeatStep.x
+                    : (barLeftPx + insetLeft);
+                const anchorY = Math.max(14, (absPos.y - 0.7) * unitToPx);
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'multirest-skip-btn';
+                btn.dataset.restStartMeasure = String(mIdx);
+                btn.dataset.restEndMeasure = String(mIdx + multiRestCount - 1);
+                btn.hidden = true;
+                btn.title = `Skip ${multiRestCount}-bar rest directly to beat 1 of Bar ${targetBar.barNumber}`;
+                btn.style.left = `${firstBeatX.toFixed(1)}px`;
+                btn.style.top = `${anchorY.toFixed(1)}px`;
+
+                btn.innerHTML = `
+                    <span class="skip-rest-text">Click to skip ahead</span>
+                    <svg class="skip-rest-arrow" viewBox="0 0 14 16" width="11" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="7" y1="1.5" x2="7" y2="13.5"></line>
+                        <polyline points="2.5 9.5 7 14 11.5 9.5"></polyline>
+                    </svg>
+                `;
+
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    btn.hidden = true;
+                    // If A-B Loop is active and targetBar is outside loop range, shift loop range
+                    if (state.loopEnabled && state.barData.length > 0) {
+                        const { startTicks: loopStart, endTicks: loopEnd } = getLoopBoundsTicks();
+                        if (firstBeatTicks < loopStart || firstBeatTicks >= loopEnd) {
+                            const span = Math.max(0, state.loopEndBar - state.loopStartBar);
+                            state.loopStartBar = targetBar.barNumber;
+                            state.loopEndBar = Math.min(state.barData.length, targetBar.barNumber + span);
+                            syncLoopInputsUI();
+                        }
+                    }
+
+                    if (state.isPlaying) {
+                        seekToTicks(firstBeatTicks, { snapScroll: false, keepPlaying: true, glideCamera: true });
+                    } else {
+                        seekToTicks(firstBeatTicks, { snapScroll: false, keepPlaying: false, keepViewport: true });
+                    }
+                    updateActiveMultiRestSkipVisibility(true);
+                    toast(`Skipped multi-bar rest to Bar ${targetBar.barNumber}`);
+                });
+
+                frag.appendChild(btn);
+            }
+        }
+
+        layer.appendChild(frag);
+        updateActiveMultiRestSkipVisibility(true);
+    }
+
+    /**
+     * Shows the "Click to skip ahead ↓" badge ONLY while the cursor is inside that multi-measure rest,
+     * and hides it immediately when the cursor exits the multi-measure rest or when the badge is clicked.
+     */
+    function updateActiveMultiRestSkipVisibility(force = false) {
+        const box = dom.scoreDisplayArea;
+        if (!box || !state.scoreLoaded || !state.cursorSteps.length) return;
+
+        const currStep = state.cursorSteps[state.currentStepIndex] || state.cursorSteps[0];
+        const currMeasureIdx = currStep ? currStep.measureIndex : -1;
+        if (!force && state.lastSkipBadgeMeasureIdx === currMeasureIdx) return;
+        state.lastSkipBadgeMeasureIdx = currMeasureIdx;
+
+        const layer = box.querySelector('.multirest-skip-layer');
+        if (!layer) return;
+
+        const buttons = layer.querySelectorAll('.multirest-skip-btn');
+        buttons.forEach((btn) => {
+            const startM = parseInt(btn.dataset.restStartMeasure, 10);
+            const endM = parseInt(btn.dataset.restEndMeasure, 10);
+            const isCursorInsideRest = currMeasureIdx >= startM && currMeasureIdx <= endM;
+            btn.hidden = !isCursorInsideRest;
+        });
+    }
+
+    /**
      * Toggles Highlight ('H') for a given partId:
      * - Marks the part's staff in yellow, sets its volume to 100% and other parts to 70%.
      * - Shared by the Part Mixer 'H' button and the "This is my part" arrow button in front of each staff.
@@ -3208,6 +3420,7 @@
         renderPartMixerUI();
         renderStaffHighlights();
         renderStaffStartPartPointers();
+        renderMultiRestSkipPointers();
         refreshActiveNoteHighlightColors();
         applyAllPartGains(false);
         if (willHighlight) {
@@ -3627,6 +3840,7 @@
                 }
                 renderPartMixerUI();
                 updateCenteredStaffBands(true);
+                renderMultiRestSkipPointers();
                 if (willCenter) {
                     toast(`Centered ${part.name} staff vertically`);
                 }
@@ -4894,11 +5108,18 @@
 
         if (!bestStep) return;
 
+        // When the user clicks inside a measure where visible parts have only rests (such as the 1-bar count-in
+        // rest at the end of a multi-measure rest), snap to Beat 1 of that bar so they get a full count-in bar!
+        const hasVisibleNoteAtStep = Boolean(bestStep.clickableNotes && bestStep.clickableNotes.length > 0);
+        const targetSeekTicks = (!hasVisibleNoteAtStep && state.barData[bestStep.measureIndex])
+            ? state.barData[bestStep.measureIndex].startTicks
+            : bestStep.ticks;
+
         // If A-B Loop is active and the user clicked a note outside the loop range, shift loop range to include it
         if (state.loopEnabled && state.barData.length > 0) {
             const { startTicks: loopStart, endTicks: loopEnd } = getLoopBoundsTicks();
-            if (bestStep.ticks < loopStart || bestStep.ticks >= loopEnd) {
-                const clickedBarNum = getBarNumberAtTicks(bestStep.ticks);
+            if (targetSeekTicks < loopStart || targetSeekTicks >= loopEnd) {
+                const clickedBarNum = getBarNumberAtTicks(targetSeekTicks);
                 const span = Math.max(0, state.loopEndBar - state.loopStartBar);
                 state.loopStartBar = clickedBarNum;
                 state.loopEndBar = Math.min(state.barData.length, clickedBarNum + span);
@@ -4907,15 +5128,17 @@
         }
 
         if (state.isPlaying) {
-            // During playback: jump immediately to the clicked note and continue playing smoothly from there
-            seekToTicks(bestStep.ticks, { snapScroll: false, keepPlaying: true, glideCamera: true });
+            // During playback: jump immediately to the clicked note/bar and continue playing smoothly from there
+            seekToTicks(targetSeekTicks, { snapScroll: false, keepPlaying: true, glideCamera: true });
         } else {
-            // While paused: place cursor on clicked note without jerking the score away from the mouse,
+            // While paused: place cursor on clicked note/bar without jerking the score away from the mouse,
             // highlight the selected note, and play its pitch & note value
-            seekToTicks(bestStep.ticks, { snapScroll: false, keepPlaying: false, keepViewport: true });
-            highlightStepNotes(bestStep.stepIdx, clickedNote?.svgEl || null);
-            if (clickedNote) {
-                auditionClickedNote(clickedNote);
+            seekToTicks(targetSeekTicks, { snapScroll: false, keepPlaying: false, keepViewport: true });
+            if (hasVisibleNoteAtStep) {
+                highlightStepNotes(bestStep.stepIdx, clickedNote?.svgEl || null);
+                if (clickedNote) {
+                    auditionClickedNote(clickedNote);
+                }
             }
         }
     }

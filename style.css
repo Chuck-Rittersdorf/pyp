@@ -813,6 +813,60 @@ body.viewport-fullscreen .viewport-floating-hud {
     transform: translateX(1.5px);
 }
 
+/* "Click to skip ahead ↓" interactive badge above the count-in bar at the end of a multi-measure rest */
+.multirest-skip-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.multirest-skip-btn {
+    position: absolute;
+    /* Align the downward arrow at the right end of the badge (13.5px from right edge) directly over Beat 1 */
+    transform: translate(calc(-100% + 13.5px), -100%);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(13, 148, 136, 0.48);
+    background: rgba(240, 253, 250, 0.95);
+    color: #0F766E;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.10);
+    transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease, transform 0.12s ease, box-shadow 0.14s ease;
+}
+
+.multirest-skip-btn:hover {
+    background: #CCFBF1;
+    border-color: #0D9488;
+    color: #115E59;
+    box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
+    transform: translate(calc(-100% + 13.5px), calc(-100% + 1.5px));
+}
+
+.multirest-skip-btn:active {
+    transform: translate(calc(-100% + 13.5px), -100%) scale(0.96);
+}
+
+.multirest-skip-btn .skip-rest-arrow {
+    flex-shrink: 0;
+    transition: transform 0.14s ease;
+}
+
+.multirest-skip-btn:hover .skip-rest-arrow {
+    transform: translateY(1.5px);
+}
+
 /* Loading message inside score box */
 .score-loading-state {
     display: flex;
