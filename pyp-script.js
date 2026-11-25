@@ -114,7 +114,7 @@
         loopTrackHighlight: document.getElementById('loopTrackHighlight'),
         metronomeToggleButton: document.getElementById('metronomeToggleButton'),
 
-        // View, Zoom, Pitch
+        // View, Zoom, Pitch, Fullscreen
         viewContinuousBtn: document.getElementById('viewContinuousBtn'),
         viewPageBtn: document.getElementById('viewPageBtn'),
         zoomOutBtn: document.getElementById('zoomOutBtn'),
@@ -122,6 +122,12 @@
         zoomInBtn: document.getElementById('zoomInBtn'),
         a440Button: document.getElementById('a440'),
         a415Button: document.getElementById('a415'),
+        viewportFullscreenBtn: document.getElementById('viewportFullscreenBtn'),
+        appFullscreenBtn: document.getElementById('appFullscreenBtn'),
+        viewportFloatingHud: document.getElementById('viewportFloatingHud'),
+        viewportFloatingPlayBtn: document.getElementById('viewportFloatingPlayBtn'),
+        viewportFloatingFsBtn: document.getElementById('viewportFloatingFsBtn'),
+        viewportFloatingFsLabel: document.getElementById('viewportFloatingFsLabel'),
 
         // Timeline / Bar Scrubber
         sliderWithTicks: document.getElementById('sliderWithTicks'),
@@ -2584,6 +2590,15 @@
             btn.title = 'Play (Space)';
             btn.setAttribute('aria-label', 'Play');
         }
+
+        // Sync floating score-viewport Play/Pause button
+        if (dom.viewportFloatingPlayBtn) {
+            dom.viewportFloatingPlayBtn.disabled = btn.disabled;
+            const fPlay = dom.viewportFloatingPlayBtn.querySelector('.icon-play');
+            const fPause = dom.viewportFloatingPlayBtn.querySelector('.icon-pause');
+            if (fPlay) fPlay.hidden = state.isPlaying;
+            if (fPause) fPause.hidden = !state.isPlaying;
+        }
     }
 
     function setScoreControlsEnabled(enabled) {
@@ -2599,6 +2614,9 @@
         ];
         buttons.forEach((b) => { if (b) b.disabled = !enabled; });
         if (dom.navigationSlider) dom.navigationSlider.disabled = !enabled;
+        if (dom.viewportFloatingHud) {
+            dom.viewportFloatingHud.hidden = !enabled && !state.viewportFullscreen;
+        }
         updatePlayPauseButtonUI();
     }
 
@@ -4721,6 +4739,141 @@
         if (dom.a440Button) dom.a440Button.addEventListener('click', () => setConcertPitch(CONFIG.DEFAULT_PITCH_HZ));
         if (dom.a415Button) dom.a415Button.addEventListener('click', () => setConcertPitch(CONFIG.BAROQUE_PITCH_HZ));
 
+        // Fullscreen Modes:
+        // 1. Score Viewport Full Screen (expands #scoreWorkspace edge-to-edge, hiding toolbars with a floating HUD)
+        // 2. App Full Screen (uses browser Fullscreen API to run the entire PYP app full screen)
+        const syncViewportFullscreenUI = () => {
+            const active = Boolean(state.viewportFullscreen);
+            document.body.classList.toggle('viewport-fullscreen', active);
+
+            if (dom.viewportFullscreenBtn) {
+                dom.viewportFullscreenBtn.classList.toggle('active', active);
+                dom.viewportFullscreenBtn.setAttribute('aria-pressed', String(active));
+                const exp = dom.viewportFullscreenBtn.querySelector('.icon-vp-expand');
+                const col = dom.viewportFullscreenBtn.querySelector('.icon-vp-collapse');
+                if (exp) exp.hidden = active;
+                if (col) col.hidden = !active;
+                dom.viewportFullscreenBtn.title = active
+                    ? 'Exit Score Viewport Full Screen (V / Esc)'
+                    : 'Score Viewport Full Screen (V)';
+            }
+
+            if (dom.viewportFloatingHud) {
+                dom.viewportFloatingHud.hidden = !state.scoreLoaded && !active;
+            }
+            if (dom.viewportFloatingPlayBtn) {
+                dom.viewportFloatingPlayBtn.hidden = !active || !state.scoreLoaded;
+            }
+            if (dom.viewportFloatingFsBtn) {
+                const exp = dom.viewportFloatingFsBtn.querySelector('.icon-vp-expand');
+                const col = dom.viewportFloatingFsBtn.querySelector('.icon-vp-collapse');
+                if (exp) exp.hidden = active;
+                if (col) col.hidden = !active;
+                dom.viewportFloatingFsBtn.title = active
+                    ? 'Exit Score Full Screen (V / Esc)'
+                    : 'Score Full Screen (V)';
+            }
+            if (dom.viewportFloatingFsLabel) {
+                dom.viewportFloatingFsLabel.textContent = active ? 'Exit Full' : 'Score Full';
+            }
+
+            requestAnimationFrame(() => {
+                renderBarTickMarks();
+                updateLoopTrackHighlight();
+                if (state.scoreLoaded && dom.scoreDisplayArea) {
+                    if (state.continuousScrollMode) {
+                        updateContinuousHorizontalPadding(false);
+                        updateVerticalCenteringForHighlight(true, 1 / 60, false);
+                        updateCameraForTicks(state.isPlaying ? state.smoothTicks : state.currentTicks, 0, true);
+                    } else {
+                        reRenderScorePreservingState();
+                    }
+                }
+            });
+        };
+
+        const toggleViewportFullscreen = (forceState) => {
+            const nextState = typeof forceState === 'boolean' ? forceState : !state.viewportFullscreen;
+            if (Boolean(state.viewportFullscreen) === nextState) return;
+            state.viewportFullscreen = nextState;
+            syncViewportFullscreenUI();
+        };
+
+        const getNativeFullscreenElement = () =>
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.msFullscreenElement ||
+            null;
+
+        const syncAppFullscreenUI = () => {
+            const isFs = Boolean(getNativeFullscreenElement());
+            if (dom.appFullscreenBtn) {
+                dom.appFullscreenBtn.classList.toggle('active', isFs);
+                dom.appFullscreenBtn.setAttribute('aria-pressed', String(isFs));
+                const enterIcon = dom.appFullscreenBtn.querySelector('.icon-fs-enter');
+                const exitIcon = dom.appFullscreenBtn.querySelector('.icon-fs-exit');
+                if (enterIcon) enterIcon.hidden = isFs;
+                if (exitIcon) exitIcon.hidden = !isFs;
+                dom.appFullscreenBtn.title = isFs
+                    ? 'Exit App Full Screen (F)'
+                    : 'App Full Screen (F)';
+            }
+        };
+
+        const toggleAppFullscreen = async () => {
+            const root = document.documentElement;
+            const currentFs = getNativeFullscreenElement();
+            try {
+                if (!currentFs) {
+                    if (typeof root.requestFullscreen === 'function') {
+                        await root.requestFullscreen();
+                    } else if (typeof root.webkitRequestFullscreen === 'function') {
+                        root.webkitRequestFullscreen();
+                    } else {
+                        // iOS iPhone Safari fallback where Fullscreen API is unavailable on documentElement
+                        toggleViewportFullscreen();
+                        return;
+                    }
+                } else {
+                    if (typeof document.exitFullscreen === 'function') {
+                        await document.exitFullscreen();
+                    } else if (typeof document.webkitExitFullscreen === 'function') {
+                        document.webkitExitFullscreen();
+                    }
+                }
+            } catch (_) {
+                toggleViewportFullscreen();
+            }
+            syncAppFullscreenUI();
+        };
+
+        if (dom.viewportFullscreenBtn) {
+            dom.viewportFullscreenBtn.addEventListener('click', () => toggleViewportFullscreen());
+        }
+        if (dom.viewportFloatingFsBtn) {
+            dom.viewportFloatingFsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleViewportFullscreen();
+            });
+        }
+        if (dom.viewportFloatingPlayBtn) {
+            dom.viewportFloatingPlayBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!state.scoreLoaded) return;
+                if (state.isPlaying) {
+                    pausePlayback(true);
+                } else {
+                    startPlayback();
+                }
+            });
+        }
+        if (dom.appFullscreenBtn) {
+            dom.appFullscreenBtn.addEventListener('click', () => toggleAppFullscreen());
+        }
+
+        document.addEventListener('fullscreenchange', syncAppFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', syncAppFullscreenUI);
+
         // Unified Navigation Slider (Single clean listener set — ZERO duplicates, ZERO freezing!)
         if (dom.navigationSlider) {
             let dragJustEnded = false;
@@ -5197,6 +5350,22 @@
                     if (state.scoreLoaded) {
                         e.preventDefault();
                         setZoom(1.0);
+                    }
+                    break;
+                case 'v':
+                case 'V':
+                    e.preventDefault();
+                    toggleViewportFullscreen();
+                    break;
+                case 'f':
+                case 'F':
+                    e.preventDefault();
+                    toggleAppFullscreen();
+                    break;
+                case 'Escape':
+                    if (state.viewportFullscreen) {
+                        e.preventDefault();
+                        toggleViewportFullscreen(false);
                     }
                     break;
                 default:

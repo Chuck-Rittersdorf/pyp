@@ -494,6 +494,96 @@ select {
     color: var(--accent);
 }
 
+.fullscreen-control-group {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1px 2px;
+    gap: 2px;
+}
+
+/* Floating Quick-Control Pill inside the Score Viewport */
+.viewport-floating-hud {
+    position: absolute;
+    top: 18px;
+    right: 24px;
+    z-index: 35;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    pointer-events: auto;
+}
+
+.viewport-floating-hud[hidden] {
+    display: none !important;
+}
+
+.vp-hud-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 9px;
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(15, 23, 42, 0.16);
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(6px);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.vp-hud-btn:hover {
+    background: #FFFFFF;
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.vp-hud-btn:active {
+    transform: scale(0.95);
+}
+
+.vp-hud-play {
+    width: 30px;
+    padding: 0;
+    background: var(--accent);
+    color: #FFFFFF;
+    border-color: var(--accent);
+}
+
+.vp-hud-play:hover {
+    background: var(--accent-hover);
+    color: #FFFFFF;
+    border-color: var(--accent-hover);
+}
+
+/* Score Viewport Full Screen Mode (maximizes the sheet music 100% edge-to-edge) */
+body.viewport-fullscreen .top-toolbar,
+body.viewport-fullscreen .bottom-dock {
+    display: none !important;
+}
+
+body.viewport-fullscreen .score-workspace {
+    padding: 0 !important;
+}
+
+body.viewport-fullscreen .score-display-box {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+body.viewport-fullscreen .viewport-floating-hud {
+    top: 10px;
+    right: 12px;
+}
+
 /* ===========================================
    SCORE WORKSPACE & DISPLAY BOX
    =========================================== */
@@ -1799,8 +1889,9 @@ kbd {
     }
 
     .top-toolbar {
-        padding: 6px 10px;
-        gap: 8px;
+        padding: 5px 10px;
+        gap: 6px;
+        min-height: 44px;
     }
 
     .toolbar-left,
@@ -1809,35 +1900,330 @@ kbd {
     }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
+    /* Compact Top Toolbar on mobile to maximize vertical room for the score viewport */
     .top-toolbar {
+        min-height: 34px;
+        padding: 3px 6px;
+        gap: 3px 5px;
+        justify-content: space-between;
+    }
+
+    .toolbar-group {
+        gap: 3px;
+    }
+
+    .toolbar-divider,
+    #shortcutsHelpBtn {
+        display: none !important;
+    }
+
+    .brand-lockup {
+        padding: 2px 4px;
+        margin: -2px -4px;
+    }
+
+    .brand-badge {
+        font-size: 15px;
+    }
+
+    #loadScoreButton {
+        width: 26px;
+        height: 26px;
+        padding: 0;
         justify-content: center;
     }
 
-    .score-workspace {
-        padding: 8px;
+    #loadScoreButton .btn-label {
+        display: none;
     }
 
+    #loadScoreButton svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .scores-folder-select {
+        max-width: 104px;
+        height: 25px;
+        font-size: 11px;
+        padding: 0 18px 0 6px;
+    }
+
+    .icon-btn {
+        width: 25px;
+        height: 25px;
+    }
+
+    .icon-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .icon-btn-sm,
+    .icon-btn-xs {
+        width: 23px;
+        height: 23px;
+    }
+
+    .play-pause-btn {
+        width: 30px;
+        height: 26px;
+    }
+
+    .play-pause-btn svg {
+        width: 15px;
+        height: 15px;
+    }
+
+    .loop-range-inputs {
+        padding: 1px 4px;
+        font-size: 10px;
+        gap: 2px;
+    }
+
+    .loop-input-wrap span {
+        display: none;
+    }
+
+    .loop-range-inputs input[type="number"] {
+        width: 32px;
+        height: 19px;
+        font-size: 10.5px;
+        padding: 0 2px;
+    }
+
+    .segmented-control {
+        padding: 1px;
+        gap: 1px;
+    }
+
+    .seg-btn {
+        height: 21px;
+        padding: 0 5px;
+        font-size: 10px;
+    }
+
+    .zoom-control,
+    .fullscreen-control-group {
+        padding: 0 1px;
+    }
+
+    .zoom-reset-btn {
+        min-width: 32px;
+        height: 21px;
+        font-size: 10px;
+        padding: 0 2px;
+    }
+
+    /* Maximize Score Workspace area on mobile */
+    .score-workspace {
+        padding: 2px 3px;
+    }
+
+    .score-display-box {
+        border-radius: 7px;
+    }
+
+    .viewport-floating-hud {
+        top: 6px;
+        right: 8px;
+        gap: 4px;
+    }
+
+    .vp-hud-btn {
+        height: 24px;
+        padding: 0 7px;
+        font-size: 10.5px;
+    }
+
+    .vp-hud-play {
+        width: 26px;
+        padding: 0;
+    }
+
+    .vp-hud-label {
+        display: none;
+    }
+
+    /* Compact Bottom Dock (Timeline + Audio Row + Part Mixer) */
     .timeline-row {
-        padding: 20px 10px 6px;
-        gap: 8px;
+        padding: 10px 6px 2px;
+        gap: 5px;
+    }
+
+    .bar-badge {
+        font-size: 10px;
+        padding: 1px 5px;
+        min-width: 42px;
+    }
+
+    .slider-with-ticks {
+        height: 14px;
+    }
+
+    .bar-ticks-container {
+        top: -10px;
+        height: 13px;
+    }
+
+    .bar-tick {
+        height: 4px;
+    }
+
+    .bar-tick.labeled {
+        height: 6px;
+    }
+
+    .bar-tick-label {
+        font-size: 8.5px;
+        padding-bottom: 1px;
     }
 
     .audio-controls-row {
-        padding: 6px 10px;
-        justify-content: center;
+        padding: 2px 6px;
+        gap: 4px;
+        justify-content: space-between;
+        flex-wrap: nowrap;
+        overflow-x: auto;
     }
 
-    .part-mixer-drawer {
-        padding: 6px 10px 8px;
+    .audio-controls-left,
+    .audio-controls-right {
+        gap: 4px;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+    }
+
+    .control-pill {
+        padding: 1px 5px 1px 3px;
+        gap: 3px;
+    }
+
+    .pill-label,
+    .select-label,
+    .bpm-sub,
+    #cursorControls {
+        display: none !important;
     }
 
     .compact-slider {
-        width: 68px;
+        width: 48px;
     }
 
     .tempo-slider {
-        width: 82px;
+        width: 58px;
+    }
+
+    .value-readout {
+        font-size: 10px;
+        min-width: 26px;
+    }
+
+    .nudge-btn {
+        width: 18px;
+        height: 18px;
+        font-size: 11px;
+    }
+
+    .tempo-readout-btn {
+        font-size: 10px;
+        padding: 1px 3px;
+    }
+
+    .compact-select {
+        height: 22px;
+        font-size: 10.5px;
+        padding: 0 17px 0 5px;
+        background-position: right 4px center;
+    }
+
+    .mixer-toggle-btn {
+        height: 22px;
+        padding: 0 6px;
+        font-size: 10.5px;
+        gap: 3px;
+    }
+
+    .mixer-toggle-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .part-count-badge {
+        min-width: 14px;
+        height: 14px;
+        font-size: 9px;
+        padding: 0 3px;
+    }
+
+    /* Compact Part Mixer Drawer & Part Cards on mobile */
+    .part-mixer-drawer {
+        padding: 3px 6px 4px;
+        min-height: 38px;
+        gap: 6px;
+    }
+
+    .part-mixer-scroll {
+        gap: 5px;
+        padding-bottom: 1px;
+    }
+
+    .part-control-entry {
+        min-width: 162px;
+        padding: 3px 6px;
+        gap: 2px;
+        border-radius: 6px;
+    }
+
+    .part-header-row {
+        gap: 4px;
+    }
+
+    .part-label {
+        font-size: 10.5px;
+        max-width: 68px;
+    }
+
+    .part-role-tag {
+        display: none;
+    }
+
+    .part-btn-group {
+        gap: 2px;
+    }
+
+    .part-button {
+        width: 19px;
+        height: 19px;
+        font-size: 9.5px;
+        border-radius: 4px;
+    }
+
+    .part-button svg {
+        width: 11px;
+        height: 11px;
+    }
+
+    .part-instrument-select {
+        height: 19px;
+        font-size: 10px;
+        padding: 0 15px 0 5px;
+    }
+
+    .part-volume-row {
+        gap: 4px;
+    }
+
+    .part-vol-value {
+        font-size: 9.5px;
+        min-width: 24px;
+    }
+
+    .reset-mixer-btn {
+        height: 22px;
+        padding: 0 6px;
+        font-size: 10px;
     }
 
     .shortcuts-grid {

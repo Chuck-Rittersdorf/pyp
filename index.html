@@ -139,6 +139,36 @@
                 <button class="seg-btn" id="a415" title="Baroque Pitch (A = 415 Hz)">415Hz</button>
             </div>
 
+            <!-- Fullscreen Controls: Score Viewport Full Screen & App Full Screen -->
+            <div class="fullscreen-control-group" role="group" aria-label="Fullscreen modes">
+                <button class="icon-btn icon-btn-sm toggle-btn" id="viewportFullscreenBtn" title="Score Viewport Full Screen (V)" aria-pressed="false" aria-label="Score viewport full screen">
+                    <svg class="icon-vp-expand" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                        <polyline points="9 3 9 9 3 9"></polyline>
+                        <polyline points="15 21 15 15 21 15"></polyline>
+                    </svg>
+                    <svg class="icon-vp-collapse" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                        <polyline points="4 14 10 14 10 20"></polyline>
+                        <polyline points="20 10 14 10 14 4"></polyline>
+                    </svg>
+                </button>
+                <button class="icon-btn icon-btn-sm toggle-btn" id="appFullscreenBtn" title="App Full Screen (F)" aria-pressed="false" aria-label="App full screen">
+                    <svg class="icon-fs-enter" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <polyline points="9 21 3 21 3 15"></polyline>
+                        <line x1="21" y1="3" x2="14" y2="10"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                    <svg class="icon-fs-exit" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+                        <polyline points="4 14 10 14 10 20"></polyline>
+                        <polyline points="20 10 14 10 14 4"></polyline>
+                        <line x1="14" y1="10" x2="21" y2="3"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                </button>
+            </div>
+
             <!-- Keyboard Shortcuts Help -->
             <button class="icon-btn icon-btn-sm" id="shortcutsHelpBtn" title="Keyboard Shortcuts (?)" aria-label="Keyboard shortcuts">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -203,6 +233,33 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Floating Viewport Quick-Controls (Score Full Screen toggle + Play/Pause while in Score Full Screen) -->
+        <div class="viewport-floating-hud" id="viewportFloatingHud" hidden>
+            <button type="button" class="vp-hud-btn vp-hud-play" id="viewportFloatingPlayBtn" title="Play / Pause (Space)" aria-label="Play or pause" hidden>
+                <svg class="icon-play" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+                    <path d="M8 5v14l11-7z"></path>
+                </svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true" hidden>
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+                </svg>
+            </button>
+            <button type="button" class="vp-hud-btn" id="viewportFloatingFsBtn" title="Toggle Score Full Screen (V)" aria-label="Toggle score full screen">
+                <svg class="icon-vp-expand" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <polyline points="9 21 3 21 3 15"></polyline>
+                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+                <svg class="icon-vp-collapse" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+                    <polyline points="4 14 10 14 10 20"></polyline>
+                    <polyline points="20 10 14 10 14 4"></polyline>
+                    <line x1="14" y1="10" x2="21" y2="3"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+                <span class="vp-hud-label" id="viewportFloatingFsLabel">Score Full</span>
+            </button>
         </div>
 
         <!-- Drag & Drop Overlay -->
@@ -337,6 +394,8 @@
                 <div class="shortcut-item"><kbd>M</kbd><span>Toggle Metronome</span></div>
                 <div class="shortcut-item"><kbd>+</kbd> / <kbd>-</kbd><span>Zoom In / Out</span></div>
                 <div class="shortcut-item"><kbd>0</kbd><span>Reset Zoom (100%)</span></div>
+                <div class="shortcut-item"><kbd>V</kbd><span>Score Viewport Full Screen</span></div>
+                <div class="shortcut-item"><kbd>F</kbd><span>App Full Screen</span></div>
                 <div class="shortcut-item"><kbd>Click Score</kbd><span>Jump cursor to beat</span></div>
             </div>
         </div>
