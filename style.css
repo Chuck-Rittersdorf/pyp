@@ -519,6 +519,7 @@ select {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
     /* IMPORTANT: No CSS scroll-behavior: smooth here!
        Smooth 60fps scrolling is driven directly by JS requestAnimationFrame
        so rapid updates never fight or cancel browser scroll animations. */

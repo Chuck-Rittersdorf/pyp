@@ -4657,14 +4657,52 @@
         if (dom.viewContinuousBtn) dom.viewContinuousBtn.addEventListener('click', () => setViewMode(true));
         if (dom.viewPageBtn) dom.viewPageBtn.addEventListener('click', () => setViewMode(false));
 
-        // Zoom Controls
-        const setZoom = (newZoom) => {
-            const clamped = Math.round(Math.max(CONFIG.MIN_ZOOM, Math.min(CONFIG.MAX_ZOOM, newZoom)) * 100) / 100;
+        // Zoom Controls (supports button steps, keyboard shortcuts, and 2-finger pinch focal zoom)
+        const setZoom = (newZoom, options = {}) => {
+            const { fineGrain = false, focalClientX = null, focalClientY = null } = options;
+            const factor = fineGrain ? 100 : 100;
+            const clamped = Math.round(Math.max(CONFIG.MIN_ZOOM, Math.min(CONFIG.MAX_ZOOM, newZoom)) * factor) / factor;
             if (clamped === state.zoom) return;
+
+            const box = dom.scoreDisplayArea;
+            const track = box ? box.querySelector('.osmd-score-track') : null;
+            const prevZoom = state.zoom;
+            const scaleRatio = prevZoom > 0 ? (clamped / prevZoom) : 1;
+
+            let focalViewportX = null;
+            let focalViewportY = null;
+            let prevInnerX = null;
+            let prevInnerY = null;
+
+            if (box && track && state.scoreLoaded && typeof focalClientX === 'number' && typeof focalClientY === 'number') {
+                const rect = box.getBoundingClientRect();
+                focalViewportX = focalClientX - rect.left;
+                focalViewportY = focalClientY - rect.top;
+                const prevPadTop = parseFloat(track.style.paddingTop) || 0;
+                prevInnerX = Math.max(0, (box.scrollLeft + focalViewportX) - (state.continuousPadX || 0));
+                prevInnerY = Math.max(0, (box.scrollTop + focalViewportY) - prevPadTop);
+            }
+
             state.zoom = clamped;
             if (dom.zoomResetBtn) dom.zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
             if (state.scoreLoaded) {
                 reRenderScorePreservingState();
+
+                // Preserve user's pinch focal point after vector re-render
+                if (box && track && focalViewportX !== null && focalViewportY !== null) {
+                    const hasCenteredPart = state.centeredStaffBands && state.centeredStaffBands.length > 0;
+                    if (!hasCenteredPart && prevInnerY !== null) {
+                        const newPadTop = parseFloat(track.style.paddingTop) || 0;
+                        const maxScrollY = Math.max(0, box.scrollHeight - box.clientHeight);
+                        box.scrollTop = Math.max(0, Math.min(maxScrollY, Math.round((newPadTop + prevInnerY * scaleRatio) - focalViewportY)));
+                    }
+                    if (!state.isPlaying && state.continuousScrollMode && prevInnerX !== null) {
+                        const maxScrollX = Math.max(0, box.scrollWidth - box.clientWidth);
+                        box.scrollLeft = Math.max(0, Math.min(maxScrollX, Math.round(((state.continuousPadX || 0) + prevInnerX * scaleRatio) - focalViewportX)));
+                        state.cameraScrollX = box.scrollLeft;
+                        state.isCameraGliding = true;
+                    }
+                }
             }
         };
 
@@ -4762,15 +4800,156 @@
             }
         }
 
-        // Click on Score to Jump Cursor
+        // Click on Score to Jump Cursor + Two-Finger Pinch-to-Zoom in Mobile/Touch Viewport
         if (dom.scoreDisplayArea) {
             let pointerDownPos = null;
+            let pinchActive = false;
+            let pinchStartDist = 0;
+            let pinchStartZoom = 1.0;
+            let pinchPreviewZoom = 1.0;
+            let pinchMidClientX = 0;
+            let pinchMidClientY = 0;
+            let pinchOriginX = 0;
+            let pinchOriginY = 0;
+            let lastPinchEndTime = 0;
+
             const isInteractiveWelcomeTarget = (target) => {
                 if (!target || typeof target.closest !== 'function') return false;
                 return Boolean(target.closest('#scorePlaceholder, .empty-state, .score-loading-state, .score-error-state, button, a, input, select'));
             };
 
+            const getTouchDistance = (t0, t1) => Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+
+            dom.scoreDisplayArea.addEventListener('touchstart', (e) => {
+                if (!state.scoreLoaded || e.touches.length !== 2) return;
+                const d = getTouchDistance(e.touches[0], e.touches[1]);
+                if (d < 12) return;
+
+                e.preventDefault();
+                pointerDownPos = null;
+                pinchActive = true;
+                pinchStartDist = d;
+                pinchStartZoom = state.zoom;
+                pinchPreviewZoom = state.zoom;
+                pinchMidClientX = (e.touches[0].clientX + e.touches[1].clientX) * 0.5;
+                pinchMidClientY = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
+
+                const box = dom.scoreDisplayArea;
+                const track = box.querySelector('.osmd-score-track');
+                const rect = box.getBoundingClientRect();
+                pinchOriginX = (pinchMidClientX - rect.left) + box.scrollLeft;
+                pinchOriginY = (pinchMidClientY - rect.top) + box.scrollTop;
+
+                if (track) {
+                    track.style.transformOrigin = `${pinchOriginX.toFixed(1)}px ${pinchOriginY.toFixed(1)}px`;
+                    track.style.willChange = 'transform';
+                }
+            }, { passive: false });
+
+            dom.scoreDisplayArea.addEventListener('touchmove', (e) => {
+                if (!pinchActive || !state.scoreLoaded || e.touches.length !== 2) return;
+                e.preventDefault();
+
+                const d = getTouchDistance(e.touches[0], e.touches[1]);
+                if (d < 8 || pinchStartDist <= 0) return;
+
+                pinchMidClientX = (e.touches[0].clientX + e.touches[1].clientX) * 0.5;
+                pinchMidClientY = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
+
+                const rawZoom = pinchStartZoom * (d / pinchStartDist);
+                pinchPreviewZoom = Math.max(CONFIG.MIN_ZOOM, Math.min(CONFIG.MAX_ZOOM, rawZoom));
+                const liveScale = pinchPreviewZoom / state.zoom;
+
+                const track = dom.scoreDisplayArea.querySelector('.osmd-score-track');
+                if (track) {
+                    track.style.transform = `scale(${liveScale.toFixed(4)})`;
+                }
+                if (dom.zoomResetBtn) {
+                    dom.zoomResetBtn.textContent = `${Math.round(pinchPreviewZoom * 100)}%`;
+                }
+            }, { passive: false });
+
+            const finishPinchGesture = (e) => {
+                if (!pinchActive) return;
+                if (e && e.touches && e.touches.length >= 2) return;
+
+                pinchActive = false;
+                pointerDownPos = null;
+                lastPinchEndTime = performance.now();
+
+                const track = dom.scoreDisplayArea.querySelector('.osmd-score-track');
+                if (track) {
+                    track.style.transform = '';
+                    track.style.transformOrigin = '';
+                    track.style.willChange = '';
+                }
+
+                const finalZoom = Math.round(pinchPreviewZoom * 100) / 100;
+                if (Math.abs(finalZoom - state.zoom) >= 0.02) {
+                    setZoom(finalZoom, {
+                        fineGrain: true,
+                        focalClientX: pinchMidClientX,
+                        focalClientY: pinchMidClientY,
+                    });
+                } else if (dom.zoomResetBtn) {
+                    dom.zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
+                }
+            };
+
+            dom.scoreDisplayArea.addEventListener('touchend', finishPinchGesture);
+            dom.scoreDisplayArea.addEventListener('touchcancel', finishPinchGesture);
+
+            // Trackpad / touchscreen Ctrl+Wheel pinch zoom inside the score viewport
+            let wheelZoomTimer = null;
+            let wheelPreviewZoom = null;
+            dom.scoreDisplayArea.addEventListener('wheel', (e) => {
+                if (!state.scoreLoaded || !e.ctrlKey) return;
+                e.preventDefault();
+
+                const baseZoom = wheelPreviewZoom !== null ? wheelPreviewZoom : state.zoom;
+                const factor = Math.exp(-e.deltaY * 0.0045);
+                wheelPreviewZoom = Math.max(CONFIG.MIN_ZOOM, Math.min(CONFIG.MAX_ZOOM, baseZoom * factor));
+
+                const box = dom.scoreDisplayArea;
+                const track = box.querySelector('.osmd-score-track');
+                const rect = box.getBoundingClientRect();
+                const originX = (e.clientX - rect.left) + box.scrollLeft;
+                const originY = (e.clientY - rect.top) + box.scrollTop;
+                const liveScale = wheelPreviewZoom / state.zoom;
+
+                if (track) {
+                    track.style.transformOrigin = `${originX.toFixed(1)}px ${originY.toFixed(1)}px`;
+                    track.style.transform = `scale(${liveScale.toFixed(4)})`;
+                }
+                if (dom.zoomResetBtn) {
+                    dom.zoomResetBtn.textContent = `${Math.round(wheelPreviewZoom * 100)}%`;
+                }
+
+                const clientX = e.clientX;
+                const clientY = e.clientY;
+                window.clearTimeout(wheelZoomTimer);
+                wheelZoomTimer = window.setTimeout(() => {
+                    const targetZoom = wheelPreviewZoom;
+                    wheelPreviewZoom = null;
+                    if (track) {
+                        track.style.transform = '';
+                        track.style.transformOrigin = '';
+                    }
+                    if (targetZoom !== null) {
+                        setZoom(targetZoom, {
+                            fineGrain: true,
+                            focalClientX: clientX,
+                            focalClientY: clientY,
+                        });
+                    }
+                }, 140);
+            }, { passive: false });
+
             dom.scoreDisplayArea.addEventListener('pointerdown', (e) => {
+                if (pinchActive || (performance.now() - lastPinchEndTime) < 350) {
+                    pointerDownPos = null;
+                    return;
+                }
                 if (!state.scoreLoaded || isInteractiveWelcomeTarget(e.target)) {
                     pointerDownPos = null;
                     return;
@@ -4778,6 +4957,10 @@
                 pointerDownPos = { x: e.clientX, y: e.clientY };
             });
             dom.scoreDisplayArea.addEventListener('click', (e) => {
+                if (pinchActive || (performance.now() - lastPinchEndTime) < 350) {
+                    pointerDownPos = null;
+                    return;
+                }
                 if (!state.scoreLoaded || !pointerDownPos || isInteractiveWelcomeTarget(e.target)) {
                     pointerDownPos = null;
                     return;
