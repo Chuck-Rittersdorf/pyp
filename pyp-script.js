@@ -838,11 +838,11 @@
             try {
                 if (!state.audioInitialized) {
                     await Tone.start();
-                    // Minimize scheduling lookahead (default 100ms -> 30ms) for snappy mobile & desktop sync
+                    // Set scheduling lookahead to 80ms (compensated in getAudibleTransportTicks) so UI interactions never starve audio
                     try {
                         const ctx = typeof Tone.getContext === 'function' ? Tone.getContext() : Tone.context;
                         if (ctx && typeof ctx.lookAhead === 'number') {
-                            ctx.lookAhead = 0.03;
+                            ctx.lookAhead = 0.08;
                         }
                     } catch (_) { /* ignore */ }
                     ensureMasterAudioChain();
@@ -2011,6 +2011,7 @@
         }
         state.osmd.zoom = getEffectiveOsmdZoom();
         state.osmd.render();
+        captureBaseSvgDimensions();
 
         extractScoreData(true);
 
@@ -2029,6 +2030,108 @@
         }
         updateCameraForTicks(liveTicks, 0, true, false);
         updateTimelineReadout(liveTicks);
+    }
+
+    /**
+     * Captures the rendered <svg> base dimensions and locks their viewBox after osmd.render()
+     * so subsequent zoom changes can scale the vector SVG and precomputed coordinates in <1ms
+     * without ever calling osmd.render() or blocking Tone.js audio playback.
+     */
+    function captureBaseSvgDimensions() {
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        state.renderedEffZoom = getEffectiveOsmdZoom();
+        const svgs = inner.querySelectorAll('svg');
+        svgs.forEach((svg) => {
+            const w = parseFloat(svg.getAttribute('width')) || svg.clientWidth || 0;
+            const h = parseFloat(svg.getAttribute('height')) || svg.clientHeight || 0;
+            if (w > 0 && h > 0) {
+                svg.dataset.baseWidth = String(w);
+                svg.dataset.baseHeight = String(h);
+                if (!svg.getAttribute('viewBox')) {
+                    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+                }
+            }
+        });
+    }
+
+    /**
+     * Scales the vector <svg> score and all precomputed cursor/note/overlay coordinates in <1ms
+     * without invoking osmd.render() or extractScoreData(), ensuring 100% uninterrupted audio playback.
+     */
+    function applyFastVectorZoom(prevEffZoom, newEffZoom) {
+        if (!state.osmd || !state.scoreLoaded || !(prevEffZoom > 0) || !(newEffZoom > 0)) return;
+
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        const stepRatio = newEffZoom / prevEffZoom;
+        const baseEffZoom = state.renderedEffZoom || prevEffZoom;
+        const baseRatio = newEffZoom / baseEffZoom;
+
+        // 1. Resize vector <svg> elements via viewBox scaling (100% crisp vectors, zero VexFlow re-engraving)
+        const svgs = inner.querySelectorAll('svg');
+        svgs.forEach((svg) => {
+            const baseW = parseFloat(svg.dataset.baseWidth) || 0;
+            const baseH = parseFloat(svg.dataset.baseHeight) || 0;
+            if (baseW > 0 && baseH > 0) {
+                const newW = baseW * baseRatio;
+                const newH = baseH * baseRatio;
+                svg.setAttribute('width', newW.toFixed(2));
+                svg.setAttribute('height', newH.toFixed(2));
+                const pageDiv = svg.parentElement;
+                if (pageDiv && pageDiv !== inner) {
+                    pageDiv.style.width = `${newW.toFixed(2)}px`;
+                    pageDiv.style.height = `${newH.toFixed(2)}px`;
+                }
+            }
+        });
+
+        // 2. Scale precomputed cursor & note hit coordinates in-place in O(N) microseconds
+        for (let i = 0; i < state.cursorSteps.length; i++) {
+            const s = state.cursorSteps[i];
+            s.x *= stepRatio;
+            if (typeof s.rawVisibleX === 'number') s.rawVisibleX *= stepRatio;
+            s.hitX *= stepRatio;
+            s.y *= stepRatio;
+            s.height *= stepRatio;
+            if (Array.isArray(s.clickableNotes)) {
+                for (let j = 0; j < s.clickableNotes.length; j++) {
+                    const cn = s.clickableNotes[j];
+                    if (typeof cn.noteX === 'number') cn.noteX *= stepRatio;
+                    if (typeof cn.noteY === 'number') cn.noteY *= stepRatio;
+                }
+            }
+        }
+        state.scoreEndX *= stepRatio;
+        state.osmd.zoom = newEffZoom;
+
+        // 3. Scale the cursor element dimensions to match the zoomed staff height
+        const currStep = state.cursorSteps[state.currentStepIndex];
+        const cursorEl = state.osmd?.cursor?.cursorElement;
+        if (cursorEl && currStep) {
+            cursorEl.style.height = `${currStep.height.toFixed(1)}px`;
+            cursorEl.style.top = `${currStep.y.toFixed(2)}px`;
+            const cursorType = getCurrentCursorType();
+            if (cursorType === 3 || cursorType === 4) {
+                const prevW = parseFloat(cursorEl.style.width) || cursorEl.width || 0;
+                if (prevW > 0) {
+                    cursorEl.style.width = `${(prevW * stepRatio).toFixed(1)}px`;
+                }
+            }
+        }
+
+        // 4. Refresh lightweight overlay layers & camera alignment
+        updateContinuousHorizontalPadding(false);
+        renderStaffHighlights();
+        renderStaffBarNumbers();
+        renderStaffStartPartPointers();
+
+        const liveTicks = state.isPlaying ? state.smoothTicks : state.currentTicks;
+        updateCameraForTicks(liveTicks, 0, true, false);
     }
 
     // ===========================================
@@ -3708,6 +3811,7 @@
             configureMultiRestMinusOneRule(osmd);
             osmd.zoom = getEffectiveOsmdZoom();
             osmd.render();
+            captureBaseSvgDimensions();
 
             state.osmd = osmd;
             state.scoreLoaded = true;
@@ -5585,6 +5689,7 @@
             const box = dom.scoreDisplayArea;
             const track = box ? box.querySelector('.osmd-score-track') : null;
             const prevZoom = state.zoom;
+            const prevEffZoom = getEffectiveOsmdZoom();
             const scaleRatio = prevZoom > 0 ? (clamped / prevZoom) : 1;
 
             let focalViewportX = null;
@@ -5602,11 +5707,12 @@
             }
 
             state.zoom = clamped;
+            const newEffZoom = getEffectiveOsmdZoom();
             if (dom.zoomResetBtn) dom.zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
             if (state.scoreLoaded) {
-                reRenderScorePreservingState();
+                applyFastVectorZoom(prevEffZoom, newEffZoom);
 
-                // Preserve user's pinch focal point after vector re-render
+                // Preserve user's pinch focal point after vector zoom
                 if (box && track && focalViewportX !== null && focalViewportY !== null) {
                     const hasCenteredPart = state.centeredStaffBands && state.centeredStaffBands.length > 0;
                     if (!hasCenteredPart && prevInnerY !== null) {
