@@ -718,7 +718,7 @@ body.viewport-fullscreen .viewport-floating-hud {
     white-space: nowrap;
 }
 
-/* "This is my part ->" interactive arrow buttons in front of each staff at the start of the score */
+/* Part Name + "This is my part ->" interactive arrow buttons in front of each staff at the start of the score */
 .staff-part-pointers-layer {
     position: absolute;
     inset: 0;
@@ -726,9 +726,43 @@ body.viewport-fullscreen .viewport-floating-hud {
     z-index: 6;
 }
 
-.staff-my-part-btn {
+.staff-start-part-group {
     position: absolute;
-    transform: translate(-100%, -65%);
+    transform: translate(-100%, -50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    pointer-events: auto;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.staff-start-part-name {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 0.14s ease, background-color 0.14s ease;
+}
+
+.staff-start-part-group:hover .staff-start-part-name {
+    color: #854D0E;
+}
+
+.staff-start-part-group.active .staff-start-part-name {
+    color: #854D0E;
+    background: rgba(250, 204, 21, 0.28);
+}
+
+.staff-my-part-btn {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -755,11 +789,11 @@ body.viewport-fullscreen .viewport-floating-hud {
     border-color: #CA8A04;
     color: #854D0E;
     box-shadow: 0 2px 7px rgba(202, 138, 4, 0.25);
-    transform: translate(calc(-100% + 2px), -65%);
+    transform: translateX(1.5px);
 }
 
 .staff-my-part-btn:active {
-    transform: translate(-100%, -65%) scale(0.96);
+    transform: scale(0.96);
 }
 
 .staff-my-part-btn.active {

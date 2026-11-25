@@ -1228,6 +1228,25 @@
                     };
                 });
 
+                // Disambiguate duplicate part names by appending 1, 2, 3... (e.g. "Tromba 1", "Tromba 2", "Tromba 3")
+                const partNameCounts = new Map();
+                for (const pInfo of rawPartInfos) {
+                    const key = (pInfo.name || 'Part').trim().toLowerCase();
+                    partNameCounts.set(key, (partNameCounts.get(key) || 0) + 1);
+                }
+                const partNameIndex = new Map();
+                for (const pInfo of rawPartInfos) {
+                    const baseName = (pInfo.name || 'Part').trim();
+                    const key = baseName.toLowerCase();
+                    if ((partNameCounts.get(key) || 0) > 1) {
+                        const num = (partNameIndex.get(key) || 0) + 1;
+                        partNameIndex.set(key, num);
+                        pInfo.name = `${baseName} ${num}`;
+                    } else {
+                        pInfo.name = baseName;
+                    }
+                }
+
                 rawPartInfos.forEach((pInfo) => {
                     const { partId, name: partName } = pInfo;
                     if (!nextParts[partId]) {
@@ -1609,6 +1628,24 @@
         state.currentStepIndex = 0;
 
         if (!canFastRebuild) {
+            // Ensure any fallback-discovered parts with duplicate names are also numbered (1, 2, 3...)
+            const allPartsList = Object.values(nextParts);
+            const fallbackCounts = new Map();
+            for (const p of allPartsList) {
+                const key = (p.name || 'Part').trim().toLowerCase();
+                fallbackCounts.set(key, (fallbackCounts.get(key) || 0) + 1);
+            }
+            const fallbackSeen = new Map();
+            for (const p of allPartsList) {
+                const base = (p.name || 'Part').trim();
+                const key = base.toLowerCase();
+                if ((fallbackCounts.get(key) || 0) > 1) {
+                    const num = (fallbackSeen.get(key) || 0) + 1;
+                    fallbackSeen.set(key, num);
+                    p.name = `${base} ${num}`;
+                }
+            }
+
             const lastBarEnd = barData.length ? barData[barData.length - 1].endTicks : 0;
             const lastStepTick = cursorSteps.length ? cursorSteps[cursorSteps.length - 1].ticks : 0;
             state.totalMusicalTicks = Math.max(lastBarEnd, maxNoteEndTicks, lastStepTick, 1);
@@ -2009,7 +2046,7 @@
 
         track.classList.toggle('page-mode', !state.continuousScrollMode);
 
-        if (resetForRender || !state.continuousScrollMode) {
+        if (resetForRender) {
             state.continuousPadX = 0;
             track.style.paddingLeft = '0px';
             track.style.paddingRight = '0px';
@@ -2017,7 +2054,18 @@
             return;
         }
 
-        const padX = Math.max(0, Math.round(box.clientWidth * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X));
+        if (!state.continuousScrollMode) {
+            // In Page View, reserve left margin on the track so the part name and "This is my part ->" button
+            // sit cleanly in front of the first system's staves without overlapping the clef or notes
+            const pageLeftPad = window.innerWidth <= 768 ? 148 : 184;
+            state.continuousPadX = pageLeftPad;
+            track.style.paddingLeft = `${pageLeftPad}px`;
+            track.style.paddingRight = '0px';
+            if (inner) inner.style.transform = '';
+            return;
+        }
+
+        const padX = Math.max(188, Math.round(box.clientWidth * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X));
         state.continuousPadX = padX;
         track.style.paddingLeft = `${padX}px`;
         track.style.paddingRight = `${padX}px`;
@@ -2143,10 +2191,10 @@
             const anchorOffset = viewportW * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X;
             let desiredX = Math.max(0, Math.min(maxScrollX, (state.continuousPadX + interpX) - anchorOffset));
 
-            // When paused at the very start of the score (ticks === 0), keep the front of the staves
-            // and the "This is my part" arrow buttons in view on narrow mobile screens
+            // When paused at the very start of the score (ticks === 0), keep the front of the staves,
+            // part names, and "This is my part" arrow buttons in view
             if (!state.isPlaying && nowTicks <= 0) {
-                const maxStartScroll = Math.max(0, (state.continuousPadX || 0) - 108);
+                const maxStartScroll = Math.max(0, (state.continuousPadX || 0) - 188);
                 desiredX = Math.min(desiredX, maxStartScroll);
             }
 
@@ -3166,12 +3214,26 @@
         if (entries.length === 0) return;
 
         const frag = document.createDocumentFragment();
-        const padLeft = state.continuousScrollMode ? (state.continuousPadX || 0) : 0;
-        const minRightAnchorX = 104 - padLeft;
+        const padLeft = state.continuousPadX || 0;
+        const minRightAnchorX = Math.max(4, 180 - padLeft);
 
         for (const item of entries) {
-            const { part, staffStartX, staffTopY } = item;
+            const { part, staffStartX, staffTopY, staffHeightPx } = item;
             const isHighlighted = Boolean(part.highlighted);
+
+            // Position right in front of the beginning of the staff, vertically centered on the 5-line staff
+            const rightAnchorX = Math.max(minRightAnchorX, staffStartX - 6 * effZoom);
+            const centerAnchorY = staffTopY + staffHeightPx * 0.5;
+
+            const group = document.createElement('div');
+            group.className = `staff-start-part-group${isHighlighted ? ' active' : ''}`;
+            group.style.left = `${rightAnchorX.toFixed(1)}px`;
+            group.style.top = `${centerAnchorY.toFixed(1)}px`;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'staff-start-part-name';
+            nameSpan.textContent = part.name;
+            nameSpan.title = part.name;
 
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -3181,14 +3243,6 @@
                 : `Highlight ${part.name} ("This is my part")`;
             btn.setAttribute('aria-pressed', String(isHighlighted));
 
-            // Position right in front of the staff start, just above the instrument name label
-            // so both the instrument name and the first bar number remain 100% readable
-            const rightAnchorX = Math.max(minRightAnchorX, staffStartX - 4 * effZoom);
-            const topAnchorY = Math.max(10, staffTopY - 5 * effZoom);
-
-            btn.style.left = `${rightAnchorX.toFixed(1)}px`;
-            btn.style.top = `${topAnchorY.toFixed(1)}px`;
-
             btn.innerHTML = `
                 <span class="my-part-text">${isHighlighted ? 'My part' : 'This is my part'}</span>
                 <svg class="my-part-arrow" viewBox="0 0 18 14" width="13" height="11" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3197,12 +3251,16 @@
                 </svg>
             `;
 
-            btn.addEventListener('click', (e) => {
+            const handleToggle = (e) => {
                 e.stopPropagation();
                 togglePartHighlight(part.id);
-            });
+            };
+            btn.addEventListener('click', handleToggle);
+            nameSpan.addEventListener('click', handleToggle);
 
-            frag.appendChild(btn);
+            group.appendChild(nameSpan);
+            group.appendChild(btn);
+            frag.appendChild(group);
         }
 
         layer.appendChild(frag);
