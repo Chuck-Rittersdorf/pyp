@@ -3162,6 +3162,10 @@
         const seenPartIds = new Set();
         const firstSystem = osmd.GraphicSheet?.MusicPages?.[0]?.MusicSystems?.[0];
 
+        const fiveLineStaffUnits = (typeof osmd.EngravingRules?.StaffHeight === 'number' && osmd.EngravingRules.StaffHeight > 0)
+            ? osmd.EngravingRules.StaffHeight
+            : 4.0;
+
         if (firstSystem && Array.isArray(firstSystem.StaffLines) && firstSystem.StaffLines.length > 0) {
             for (let sIdx = 0; sIdx < firstSystem.StaffLines.length; sIdx++) {
                 const sl = firstSystem.StaffLines[sIdx];
@@ -3177,15 +3181,21 @@
                 if (!part || part.hidden) continue;
 
                 const absPos = sl.PositionAndShape.AbsolutePosition;
-                const size = sl.PositionAndShape.Size;
                 if (!absPos || typeof absPos.x !== 'number' || typeof absPos.y !== 'number') continue;
+
+                // Use the actual 5-line staff height (4.0 units from top line to bottom line),
+                // NOT size.height (which includes bottom lyrics, dynamics, and inter-staff whitespace)
+                const linesArr = sl.StaffLines;
+                const lineSpanUnits = (Array.isArray(linesArr) && linesArr.length >= 5 && typeof linesArr[4]?.Position?.y === 'number' && linesArr[4].Position.y > 0)
+                    ? linesArr[4].Position.y
+                    : fiveLineStaffUnits;
 
                 seenPartIds.add(partId);
                 entries.push({
                     part,
                     staffStartX: absPos.x * unitToPx,
                     staffTopY: absPos.y * unitToPx,
-                    staffHeightPx: ((size && size.height > 0) ? size.height : 4.0) * unitToPx,
+                    staffHeightPx: lineSpanUnits * unitToPx,
                 });
             }
         } else if (Array.isArray(osmd.GraphicSheet?.MeasureList?.[0])) {
@@ -3198,7 +3208,6 @@
                 if (!part || part.hidden) continue;
 
                 const absPos = gm.PositionAndShape?.AbsolutePosition;
-                const size = gm.PositionAndShape?.Size;
                 if (!absPos || typeof absPos.x !== 'number' || typeof absPos.y !== 'number') continue;
 
                 seenPartIds.add(partId);
@@ -3206,7 +3215,7 @@
                     part,
                     staffStartX: absPos.x * unitToPx,
                     staffTopY: absPos.y * unitToPx,
-                    staffHeightPx: ((size && size.height > 0) ? size.height : 4.0) * unitToPx,
+                    staffHeightPx: fiveLineStaffUnits * unitToPx,
                 });
             }
         }
