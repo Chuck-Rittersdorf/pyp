@@ -3681,29 +3681,687 @@
         }
     }
 
+    // ===========================================
+    // STANDARD MIDI (.MID / .MIDI) -> MUSICXML CONVERTER
+    // ===========================================
+
+    const MIDI_GM_PROGRAM_NAMES = [
+        'Acoustic Grand Piano', 'Bright Acoustic Piano', 'Electric Grand Piano', 'Honky-tonk Piano',
+        'Electric Piano 1', 'Electric Piano 2', 'Harpsichord', 'Clavinet',
+        'Celesta', 'Glockenspiel', 'Music Box', 'Vibraphone', 'Marimba', 'Xylophone', 'Tubular Bells', 'Dulcimer',
+        'Drawbar Organ', 'Percussive Organ', 'Rock Organ', 'Church Organ', 'Reed Organ', 'Accordion', 'Harmonica', 'Tango Accordion',
+        'Acoustic Guitar (nylon)', 'Acoustic Guitar (steel)', 'Electric Guitar (jazz)', 'Electric Guitar (clean)',
+        'Electric Guitar (muted)', 'Overdriven Guitar', 'Distortion Guitar', 'Guitar Harmonics',
+        'Acoustic Bass', 'Electric Bass (finger)', 'Electric Bass (pick)', 'Fretless Bass', 'Slap Bass 1', 'Slap Bass 2', 'Synth Bass 1', 'Synth Bass 2',
+        'Violin', 'Viola', 'Cello', 'Contrabass', 'Tremolo Strings', 'Pizzicato Strings', 'Orchestral Harp', 'Timpani',
+        'String Ensemble 1', 'String Ensemble 2', 'SynthStrings 1', 'SynthStrings 2', 'Choir Aahs', 'Voice Oohs', 'Synth Voice', 'Orchestra Hit',
+        'Trumpet', 'Trombone', 'Tuba', 'Muted Trumpet', 'French Horn', 'Brass Section', 'SynthBrass 1', 'SynthBrass 2',
+        'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Baritone Sax', 'Oboe', 'English Horn', 'Bassoon', 'Clarinet',
+        'Piccolo', 'Flute', 'Recorder', 'Pan Flute', 'Blown Bottle', 'Shakuhachi', 'Whistle', 'Ocarina',
+    ];
+
+    function escapeXmlText(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    }
+
+    function decodeMidiTextBytes(bytes) {
+        if (!bytes || !bytes.length) return '';
+        try {
+            const utf8 = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            return utf8.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
+        } catch (_) {
+            let s = '';
+            for (let i = 0; i < bytes.length; i++) {
+                const c = bytes[i];
+                if (c >= 32 && c !== 127) s += String.fromCharCode(c);
+            }
+            return s.trim();
+        }
+    }
+
+    function parseStandardMidiFile(arrayBuffer) {
+        const bytes = new Uint8Array(arrayBuffer);
+        const view = new DataView(arrayBuffer);
+        if (bytes.length < 14) {
+            throw new Error('MIDI file is too short.');
+        }
+
+        const headerTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+        if (headerTag !== 'MThd') {
+            throw new Error('Invalid MIDI header (missing MThd).');
+        }
+
+        const headerLen = view.getUint32(4, false);
+        const format = view.getUint16(8, false);
+        const numTracks = view.getUint16(10, false);
+        const rawDivision = view.getUint16(12, false);
+        let ticksPerQuarter = 480;
+        if ((rawDivision & 0x8000) === 0 && rawDivision > 0) {
+            ticksPerQuarter = rawDivision;
+        }
+
+        let offset = 8 + headerLen;
+        const rawTracks = [];
+        const tempoEvents = [];
+        const timeSigEvents = [];
+        const keySigEvents = [];
+
+        const readVarLen = (posObj, maxEnd) => {
+            let val = 0;
+            let count = 0;
+            while (posObj.pos < maxEnd && count < 4) {
+                const b = bytes[posObj.pos++];
+                val = (val << 7) | (b & 0x7F);
+                count++;
+                if ((b & 0x80) === 0) break;
+            }
+            return val;
+        };
+
+        for (let tIdx = 0; tIdx < numTracks && offset + 8 <= bytes.length; tIdx++) {
+            const chunkTag = String.fromCharCode(
+                bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]
+            );
+            const chunkLen = view.getUint32(offset + 4, false);
+            const trackStart = offset + 8;
+            const trackEnd = Math.min(bytes.length, trackStart + chunkLen);
+            offset = trackEnd;
+
+            if (chunkTag !== 'MTrk') continue;
+
+            const posObj = { pos: trackStart };
+            let absTick = 0;
+            let runningStatus = 0;
+
+            let trackName = '';
+            let instrumentName = '';
+            const programsByChannel = new Map();
+            const openNotes = new Map();
+            const notes = [];
+            const lyrics = [];
+
+            while (posObj.pos < trackEnd) {
+                const delta = readVarLen(posObj, trackEnd);
+                absTick += delta;
+                if (posObj.pos >= trackEnd) break;
+
+                let status = bytes[posObj.pos];
+                if (status < 0x80) {
+                    if (!runningStatus) {
+                        posObj.pos++;
+                        continue;
+                    }
+                    status = runningStatus;
+                } else {
+                    posObj.pos++;
+                    if (status < 0xF0) {
+                        runningStatus = status;
+                    } else if (status === 0xF0 || status === 0xF7) {
+                        runningStatus = 0;
+                    }
+                }
+
+                if (status === 0xFF) {
+                    if (posObj.pos >= trackEnd) break;
+                    const metaType = bytes[posObj.pos++];
+                    const metaLen = readVarLen(posObj, trackEnd);
+                    const metaEnd = Math.min(trackEnd, posObj.pos + metaLen);
+                    const data = bytes.subarray(posObj.pos, metaEnd);
+                    posObj.pos = metaEnd;
+
+                    if (metaType === 0x03 && !trackName) {
+                        trackName = decodeMidiTextBytes(data);
+                    } else if (metaType === 0x04 && !instrumentName) {
+                        instrumentName = decodeMidiTextBytes(data);
+                    } else if (metaType === 0x05) {
+                        const text = decodeMidiTextBytes(data);
+                        if (text && !/^[@\\]/.test(text)) {
+                            lyrics.push({ tick: absTick, text });
+                        }
+                    } else if (metaType === 0x51 && data.length === 3) {
+                        const usPerQuarter = (data[0] << 16) | (data[1] << 8) | data[2];
+                        if (usPerQuarter > 0) {
+                            const bpm = Math.max(20, Math.min(320, Math.round(60000000 / usPerQuarter)));
+                            tempoEvents.push({ tick: absTick, bpm });
+                        }
+                    } else if (metaType === 0x58 && data.length >= 2) {
+                        const num = Math.max(1, data[0]);
+                        const den = Math.max(1, Math.pow(2, data[1]));
+                        timeSigEvents.push({ tick: absTick, num, den });
+                    } else if (metaType === 0x59 && data.length >= 2) {
+                        const rawFifths = data[0] & 0x80 ? data[0] - 256 : data[0];
+                        const fifths = Math.max(-7, Math.min(7, rawFifths));
+                        const mode = data[1] === 1 ? 'minor' : 'major';
+                        keySigEvents.push({ tick: absTick, fifths, mode });
+                    }
+                    continue;
+                }
+
+                if (status === 0xF0 || status === 0xF7) {
+                    const sysLen = readVarLen(posObj, trackEnd);
+                    posObj.pos = Math.min(trackEnd, posObj.pos + sysLen);
+                    continue;
+                }
+
+                const highNibble = status & 0xF0;
+                const channel = status & 0x0F;
+
+                if (highNibble === 0x80 || highNibble === 0x90) {
+                    const pitch = bytes[posObj.pos++] ?? 60;
+                    const vel = bytes[posObj.pos++] ?? 0;
+                    const isNoteOn = highNibble === 0x90 && vel > 0;
+                    const key = `${channel}_${pitch}`;
+
+                    if (isNoteOn) {
+                        const prevStack = openNotes.get(key);
+                        if (prevStack && prevStack.length > 0) {
+                            const prev = prevStack.shift();
+                            if (absTick > prev.startTick) {
+                                notes.push({
+                                    startTick: prev.startTick,
+                                    endTick: absTick,
+                                    midi: pitch,
+                                    velocity: prev.velocity,
+                                    channel,
+                                });
+                            }
+                        }
+                        if (!openNotes.has(key)) openNotes.set(key, []);
+                        openNotes.get(key).push({ startTick: absTick, velocity: vel });
+                    } else {
+                        const stack = openNotes.get(key);
+                        if (stack && stack.length > 0) {
+                            const started = stack.shift();
+                            if (absTick > started.startTick) {
+                                notes.push({
+                                    startTick: started.startTick,
+                                    endTick: absTick,
+                                    midi: pitch,
+                                    velocity: started.velocity,
+                                    channel,
+                                });
+                            }
+                        }
+                    }
+                } else if (highNibble === 0xA0 || highNibble === 0xB0 || highNibble === 0xE0) {
+                    posObj.pos = Math.min(trackEnd, posObj.pos + 2);
+                } else if (highNibble === 0xC0) {
+                    const prog = bytes[posObj.pos++] ?? 0;
+                    if (!programsByChannel.has(channel)) {
+                        programsByChannel.set(channel, prog);
+                    }
+                } else if (highNibble === 0xD0) {
+                    posObj.pos = Math.min(trackEnd, posObj.pos + 1);
+                } else {
+                    posObj.pos = Math.min(trackEnd, posObj.pos + 1);
+                }
+            }
+
+            rawTracks.push({
+                trackIndex: tIdx,
+                name: trackName || instrumentName || '',
+                instrumentName,
+                programsByChannel,
+                notes,
+                lyrics,
+            });
+        }
+
+        return {
+            format,
+            ticksPerQuarter,
+            rawTracks,
+            tempoEvents,
+            timeSigEvents,
+            keySigEvents,
+        };
+    }
+
+    function spellMidiPitchForKey(midi, fifths = 0) {
+        const clamped = Math.max(12, Math.min(108, Math.round(midi)));
+        const pc = ((clamped % 12) + 12) % 12;
+        const octave = Math.floor(clamped / 12) - 1;
+
+        const sharpTable = [
+            { step: 'C', alter: 0 },
+            { step: 'C', alter: 1 },
+            { step: 'D', alter: 0 },
+            { step: 'D', alter: 1 },
+            { step: 'E', alter: 0 },
+            { step: 'F', alter: 0 },
+            { step: 'F', alter: 1 },
+            { step: 'G', alter: 0 },
+            { step: 'G', alter: 1 },
+            { step: 'A', alter: 0 },
+            { step: 'A', alter: 1 },
+            { step: 'B', alter: 0 },
+        ];
+        const flatTable = [
+            { step: 'C', alter: 0 },
+            { step: 'D', alter: -1 },
+            { step: 'D', alter: 0 },
+            { step: 'E', alter: -1 },
+            { step: 'E', alter: 0 },
+            { step: 'F', alter: 0 },
+            { step: 'G', alter: -1 },
+            { step: 'G', alter: 0 },
+            { step: 'A', alter: -1 },
+            { step: 'A', alter: 0 },
+            { step: 'B', alter: -1 },
+            { step: 'B', alter: 0 },
+        ];
+
+        const entry = fifths < 0 ? flatTable[pc] : sharpTable[pc];
+        return {
+            step: entry.step,
+            alter: entry.alter,
+            octave,
+        };
+    }
+
+    function detectClefForMidiPart(partName, notes) {
+        const lower = String(partName || '').toLowerCase();
+        if (/\b(bass|basso|continuo|cello|violoncello|fagott|bassoon|contrabass|tuba|trombone|left\s*hand|lh)\b/i.test(lower)) {
+            return { sign: 'F', line: 4, octaveChange: 0 };
+        }
+        if (/\b(tenor)\b/i.test(lower)) {
+            return { sign: 'G', line: 2, octaveChange: -1 };
+        }
+        if (/\b(soprano|alto|flute|flauto|oboe|violin|violino|trumpet|tromba|clarinet|right\s*hand|rh)\b/i.test(lower)) {
+            return { sign: 'G', line: 2, octaveChange: 0 };
+        }
+
+        if (notes && notes.length > 0) {
+            const sortedMidis = notes.map((n) => n.midi).sort((a, b) => a - b);
+            const median = sortedMidis[Math.floor(sortedMidis.length * 0.5)];
+            if (median < 55) {
+                return { sign: 'F', line: 4, octaveChange: 0 };
+            }
+        }
+        return { sign: 'G', line: 2, octaveChange: 0 };
+    }
+
+    function convertMidiBufferToMusicXML(arrayBuffer, fallbackTitle = 'MIDI Score') {
+        const parsed = parseStandardMidiFile(arrayBuffer);
+        const tpq = parsed.ticksPerQuarter || 480;
+        const XML_DIVISIONS = 24; // 24 divisions per quarter note (3 divisions = 32nd note)
+        const GRID_STEP = 3;      // Quantize to 32nd-note grid so all durations decompose cleanly
+
+        // Build logical parts from tracks (splitting multi-channel Format 0 tracks by channel)
+        let candidateTracks = parsed.rawTracks.filter((t) => t.notes.length > 0);
+        if (candidateTracks.length === 0) {
+            throw new Error('No playable MIDI notes found in this file.');
+        }
+
+        // Filter out General MIDI percussion channel 9 unless every note in the file is on channel 9
+        const hasNonDrumNotes = candidateTracks.some((t) => t.notes.some((n) => n.channel !== 9));
+        const logicalParts = [];
+
+        if (candidateTracks.length === 1) {
+            const single = candidateTracks[0];
+            const filteredNotes = hasNonDrumNotes ? single.notes.filter((n) => n.channel !== 9) : single.notes;
+            const byChannel = new Map();
+            for (const n of filteredNotes) {
+                if (!byChannel.has(n.channel)) byChannel.set(n.channel, []);
+                byChannel.get(n.channel).push(n);
+            }
+            if (byChannel.size > 1) {
+                let idx = 1;
+                for (const [ch, chNotes] of byChannel.entries()) {
+                    const prog = single.programsByChannel.get(ch);
+                    const gmName = (typeof prog === 'number' && MIDI_GM_PROGRAM_NAMES[prog])
+                        ? MIDI_GM_PROGRAM_NAMES[prog]
+                        : `Part ${idx}`;
+                    logicalParts.push({
+                        id: `P${idx}`,
+                        name: gmName,
+                        midiProgram: typeof prog === 'number' ? (prog + 1) : 1,
+                        notes: chNotes,
+                        lyrics: idx === 1 ? single.lyrics : [],
+                    });
+                    idx++;
+                }
+            } else {
+                const ch = filteredNotes[0]?.channel ?? 0;
+                const prog = single.programsByChannel.get(ch);
+                const gmName = (typeof prog === 'number' && MIDI_GM_PROGRAM_NAMES[prog]) ? MIDI_GM_PROGRAM_NAMES[prog] : '';
+                logicalParts.push({
+                    id: 'P1',
+                    name: single.name || gmName || 'Part 1',
+                    midiProgram: typeof prog === 'number' ? (prog + 1) : 1,
+                    notes: filteredNotes,
+                    lyrics: single.lyrics,
+                });
+            }
+        } else {
+            let idx = 1;
+            for (const tr of candidateTracks) {
+                const filteredNotes = hasNonDrumNotes ? tr.notes.filter((n) => n.channel !== 9) : tr.notes;
+                if (filteredNotes.length === 0) continue;
+                const ch = filteredNotes[0].channel;
+                const prog = tr.programsByChannel.get(ch);
+                const gmName = (typeof prog === 'number' && MIDI_GM_PROGRAM_NAMES[prog]) ? MIDI_GM_PROGRAM_NAMES[prog] : '';
+                logicalParts.push({
+                    id: `P${idx}`,
+                    name: tr.name || gmName || `Part ${idx}`,
+                    midiProgram: typeof prog === 'number' ? (prog + 1) : 1,
+                    notes: filteredNotes,
+                    lyrics: tr.lyrics,
+                });
+                idx++;
+            }
+        }
+
+        if (logicalParts.length === 0) {
+            throw new Error('No playable pitched tracks found in MIDI file.');
+        }
+
+        // Determine initial & mid-score tempo, time signature, and key signature
+        const initialTempo = parsed.tempoEvents.length > 0 ? parsed.tempoEvents[0].bpm : 120;
+        const initialTimeSig = parsed.timeSigEvents.length > 0
+            ? parsed.timeSigEvents[0]
+            : { num: 4, den: 4 };
+        const initialKeySig = parsed.keySigEvents.length > 0
+            ? parsed.keySigEvents[0]
+            : { fifths: 0, mode: 'major' };
+
+        const measureDivisions = Math.max(
+            GRID_STEP,
+            Math.round((initialTimeSig.num * (4 / initialTimeSig.den)) * XML_DIVISIONS / GRID_STEP) * GRID_STEP
+        );
+
+        const tickToQuantizedDiv = (tick) => {
+            const rawDiv = (tick / tpq) * XML_DIVISIONS;
+            return Math.max(0, Math.round(rawDiv / GRID_STEP) * GRID_STEP);
+        };
+
+        // Quantize notes & group simultaneous notes into chords per part
+        let maxScoreDiv = measureDivisions;
+        for (const part of logicalParts) {
+            const lyricMap = new Map();
+            if (Array.isArray(part.lyrics)) {
+                for (const lyr of part.lyrics) {
+                    const qDiv = tickToQuantizedDiv(lyr.tick);
+                    if (!lyricMap.has(qDiv)) {
+                        lyricMap.set(qDiv, lyr.text);
+                    }
+                }
+            }
+
+            const qNotes = [];
+            for (const n of part.notes) {
+                const qStart = tickToQuantizedDiv(n.startTick);
+                const qEnd = Math.max(qStart + GRID_STEP, tickToQuantizedDiv(n.endTick));
+                qNotes.push({
+                    qStart,
+                    qEnd,
+                    midi: n.midi,
+                });
+                if (qEnd > maxScoreDiv) maxScoreDiv = qEnd;
+            }
+
+            qNotes.sort((a, b) => (a.qStart - b.qStart) || (a.midi - b.midi));
+
+            // Group simultaneous note onsets into clean non-overlapping chord events
+            const chordEvents = [];
+            for (const qn of qNotes) {
+                const last = chordEvents[chordEvents.length - 1];
+                if (last && last.qStart === qn.qStart) {
+                    if (!last.midis.includes(qn.midi) && last.midis.length < 4) {
+                        last.midis.push(qn.midi);
+                        last.qEnd = Math.max(last.qEnd, qn.qEnd);
+                    }
+                } else {
+                    if (last && last.qEnd > qn.qStart) {
+                        last.qEnd = qn.qStart;
+                    }
+                    chordEvents.push({
+                        qStart: qn.qStart,
+                        qEnd: qn.qEnd,
+                        midis: [qn.midi],
+                        lyric: lyricMap.get(qn.qStart) || null,
+                    });
+                }
+            }
+
+            part.chordEvents = chordEvents.filter((ev) => ev.qEnd > ev.qStart);
+            part.clef = detectClefForMidiPart(part.name, part.notes);
+        }
+
+        const totalMeasures = Math.max(1, Math.min(600, Math.ceil(maxScoreDiv / measureDivisions)));
+
+        // Map tempo changes to measure numbers
+        const tempoByMeasure = new Map();
+        tempoByMeasure.set(0, initialTempo);
+        for (const te of parsed.tempoEvents) {
+            const mIdx = Math.floor(tickToQuantizedDiv(te.tick) / measureDivisions);
+            if (mIdx >= 0 && mIdx < totalMeasures) {
+                tempoByMeasure.set(mIdx, te.bpm);
+            }
+        }
+
+        const VALID_CHUNKS = [
+            { div: 96, type: 'whole', dot: false },
+            { div: 72, type: 'half', dot: true },
+            { div: 48, type: 'half', dot: false },
+            { div: 36, type: 'quarter', dot: true },
+            { div: 24, type: 'quarter', dot: false },
+            { div: 18, type: 'eighth', dot: true },
+            { div: 12, type: 'eighth', dot: false },
+            { div: 9,  type: '16th', dot: true },
+            { div: 6,  type: '16th', dot: false },
+            { div: 3,  type: '32nd', dot: false },
+        ];
+
+        const decomposeDuration = (durDiv) => {
+            const chunks = [];
+            let rem = Math.max(0, Math.round(durDiv / GRID_STEP) * GRID_STEP);
+            while (rem > 0) {
+                let matched = VALID_CHUNKS[VALID_CHUNKS.length - 1];
+                for (const cand of VALID_CHUNKS) {
+                    if (cand.div <= rem) {
+                        matched = cand;
+                        break;
+                    }
+                }
+                chunks.push(matched);
+                rem -= matched.div;
+            }
+            return chunks;
+        };
+
+        const emitRestXml = (durDiv, isFullMeasure = false) => {
+            if (isFullMeasure) {
+                return `<note><rest measure="yes"/><duration>${durDiv}</duration><voice>1</voice></note>`;
+            }
+            const chunks = decomposeDuration(durDiv);
+            let out = '';
+            for (const c of chunks) {
+                out += `<note><rest/><duration>${c.div}</duration><voice>1</voice><type>${c.type}</type>${c.dot ? '<dot/>' : ''}</note>`;
+            }
+            return out;
+        };
+
+        const emitChordSpanXml = (midis, durDiv, tieStopFromPrev, tieStartToNext, lyricText, fifths) => {
+            const chunks = decomposeDuration(durDiv);
+            let out = '';
+            for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
+                const chunk = chunks[cIdx];
+                const hasTieStop = (cIdx === 0 && tieStopFromPrev) || cIdx > 0;
+                const hasTieStart = (cIdx === chunks.length - 1 && tieStartToNext) || cIdx < chunks.length - 1;
+
+                for (let mIdx = 0; mIdx < midis.length; mIdx++) {
+                    const pitch = spellMidiPitchForKey(midis[mIdx], fifths);
+                    const isChordNote = mIdx > 0;
+                    out += '<note>';
+                    if (isChordNote) out += '<chord/>';
+                    out += `<pitch><step>${pitch.step}</step>${pitch.alter !== 0 ? `<alter>${pitch.alter}</alter>` : ''}<octave>${pitch.octave}</octave></pitch>`;
+                    out += `<duration>${chunk.div}</duration>`;
+                    if (hasTieStop) out += '<tie type="stop"/>';
+                    if (hasTieStart) out += '<tie type="start"/>';
+                    out += '<voice>1</voice>';
+                    out += `<type>${chunk.type}</type>`;
+                    if (chunk.dot) out += '<dot/>';
+                    if (hasTieStop || hasTieStart) {
+                        out += '<notations>';
+                        if (hasTieStop) out += '<tied type="stop"/>';
+                        if (hasTieStart) out += '<tied type="start"/>';
+                        out += '</notations>';
+                    }
+                    if (cIdx === 0 && mIdx === 0 && lyricText) {
+                        out += `<lyric number="1"><syllabic>single</syllabic><text>${escapeXmlText(lyricText)}</text></lyric>`;
+                    }
+                    out += '</note>';
+                }
+            }
+            return out;
+        };
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        xml += `<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n`;
+        xml += `<score-partwise version="3.1">\n`;
+        xml += `  <work><work-title>${escapeXmlText(fallbackTitle)}</work-title></work>\n`;
+        xml += `  <part-list>\n`;
+
+        for (const part of logicalParts) {
+            const safeName = escapeXmlText(part.name);
+            xml += `    <score-part id="${part.id}">\n`;
+            xml += `      <part-name>${safeName}</part-name>\n`;
+            xml += `      <score-instrument id="${part.id}-I1"><instrument-name>${safeName}</instrument-name></score-instrument>\n`;
+            xml += `      <midi-instrument id="${part.id}-I1"><midi-program>${part.midiProgram}</midi-program></midi-instrument>\n`;
+            xml += `    </score-part>\n`;
+        }
+        xml += `  </part-list>\n`;
+
+        for (let pIdx = 0; pIdx < logicalParts.length; pIdx++) {
+            const part = logicalParts[pIdx];
+            xml += `  <part id="${part.id}">\n`;
+
+            let evIdx = 0;
+            const events = part.chordEvents;
+
+            for (let mIdx = 0; mIdx < totalMeasures; mIdx++) {
+                const mStart = mIdx * measureDivisions;
+                const mEnd = mStart + measureDivisions;
+                xml += `    <measure number="${mIdx + 1}">\n`;
+
+                if (mIdx === 0) {
+                    xml += `      <attributes>\n`;
+                    xml += `        <divisions>${XML_DIVISIONS}</divisions>\n`;
+                    xml += `        <key><fifths>${initialKeySig.fifths}</fifths><mode>${initialKeySig.mode}</mode></key>\n`;
+                    xml += `        <time><beats>${initialTimeSig.num}</beats><beat-type>${initialTimeSig.den}</beat-type></time>\n`;
+                    xml += `        <clef><sign>${part.clef.sign}</sign><line>${part.clef.line}</line>${part.clef.octaveChange ? `<clef-octave-change>${part.clef.octaveChange}</clef-octave-change>` : ''}</clef>\n`;
+                    xml += `      </attributes>\n`;
+                }
+
+                if (pIdx === 0 && tempoByMeasure.has(mIdx)) {
+                    const bpm = tempoByMeasure.get(mIdx);
+                    xml += `      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${bpm}</per-minute></metronome></direction-type><sound tempo="${bpm}"/></direction>\n`;
+                }
+
+                // Advance evIdx to the first event overlapping [mStart, mEnd)
+                while (evIdx < events.length && events[evIdx].qEnd <= mStart) {
+                    evIdx++;
+                }
+
+                let cursor = mStart;
+                let k = evIdx;
+                let hasAnyNotesInMeasure = false;
+                let measureNotesXml = '';
+
+                while (k < events.length && events[k].qStart < mEnd) {
+                    const ev = events[k];
+                    const segStart = Math.max(mStart, ev.qStart);
+                    const segEnd = Math.min(mEnd, ev.qEnd);
+
+                    if (segStart > cursor) {
+                        measureNotesXml += emitRestXml(segStart - cursor, false);
+                        cursor = segStart;
+                    }
+
+                    if (segEnd > segStart) {
+                        hasAnyNotesInMeasure = true;
+                        const tieStopFromPrev = ev.qStart < mStart;
+                        const tieStartToNext = ev.qEnd > mEnd;
+                        const lyricText = (!tieStopFromPrev && ev.lyric) ? ev.lyric : null;
+                        measureNotesXml += emitChordSpanXml(
+                            ev.midis,
+                            segEnd - segStart,
+                            tieStopFromPrev,
+                            tieStartToNext,
+                            lyricText,
+                            initialKeySig.fifths
+                        );
+                        cursor = segEnd;
+                    }
+
+                    if (ev.qEnd <= mEnd) {
+                        k++;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (!hasAnyNotesInMeasure) {
+                    xml += `      ${emitRestXml(measureDivisions, true)}\n`;
+                } else {
+                    if (cursor < mEnd) {
+                        measureNotesXml += emitRestXml(mEnd - cursor, false);
+                    }
+                    xml += `      ${measureNotesXml}\n`;
+                }
+
+                xml += `    </measure>\n`;
+            }
+
+            xml += `  </part>\n`;
+        }
+
+        xml += `</score-partwise>\n`;
+        return xml;
+    }
+
     function loadScoreFromFile(file) {
         if (!file) return;
         const nameLower = file.name.toLowerCase();
         const isMxl = nameLower.endsWith('.mxl');
         const isXml = nameLower.endsWith('.xml') || nameLower.endsWith('.musicxml');
+        const isMidi = nameLower.endsWith('.mid') || nameLower.endsWith('.midi');
 
-        if (!isMxl && !isXml) {
-            toast('Unsupported file type. Please choose .xml, .musicxml, or .mxl', 'error');
+        if (!isMxl && !isXml && !isMidi) {
+            toast('Unsupported file type. Please choose .xml, .musicxml, .mxl, or .mid/.midi', 'error');
             return;
         }
 
-        const cleanTitle = file.name.replace(/\.(musicxml|xml|mxl)$/i, '');
+        const cleanTitle = file.name.replace(/\.(musicxml|xml|mxl|midi|mid)$/i, '');
         const reader = new FileReader();
 
         reader.onload = (e) => {
+            if (isMidi) {
+                try {
+                    const generatedXml = convertMidiBufferToMusicXML(e.target.result, cleanTitle);
+                    loadMusicXMLContent(generatedXml, cleanTitle);
+                } catch (err) {
+                    console.error('[PYP] Failed to convert MIDI file:', err);
+                    toast(`Could not load MIDI file: ${err.message || 'Invalid MIDI format'}`, 'error');
+                }
+                return;
+            }
             loadMusicXMLContent(e.target.result, cleanTitle);
         };
         reader.onerror = () => {
             toast('Error reading file from disk.', 'error');
         };
 
-        // IMPORTANT: Compressed .mxl files are binary ZIP archives and must NOT be read as UTF-8 text!
-        if (isMxl) {
+        if (isMidi) {
+            reader.readAsArrayBuffer(file);
+        } else if (isMxl) {
+            // IMPORTANT: Compressed .mxl files are binary ZIP archives and must NOT be read as UTF-8 text!
             reader.readAsBinaryString(file);
         } else {
             reader.readAsText(file);
@@ -3721,7 +4379,7 @@
     function formatScoreFileLabel(fileName) {
         const base = String(fileName || '')
             .replace(/^.*[\\/]/, '')
-            .replace(/\.(mxl|musicxml|xml)$/i, '');
+            .replace(/\.(mxl|musicxml|xml|midi|mid)$/i, '');
         const words = base.split(/[_\s-]+/).filter(Boolean);
         return words
             .map((w) => {
@@ -3793,7 +4451,7 @@
                 const rawHref = a.getAttribute('href') || '';
                 const decoded = decodeURIComponent(rawHref.split('?')[0].split('#')[0]);
                 const fileName = decoded.replace(/^.*[\\/]/, '');
-                if (/\.(mxl|musicxml|xml)$/i.test(fileName)) {
+                if (/\.(mxl|musicxml|xml|midi|mid)$/i.test(fileName)) {
                     found.push(fileName);
                 }
             });
@@ -3818,11 +4476,17 @@
         };
 
         const isMxl = entry.format === 'mxl' || entry.fileName.toLowerCase().endsWith('.mxl');
+        const isMidi = entry.format === 'mid' || entry.format === 'midi' || /\.(mid|midi)$/i.test(entry.fileName);
 
         // 1. If pre-bundled base64 data is available in manifest, decode directly in memory (works on file:// & http://)
         if (entry.base64) {
             try {
-                if (isMxl) {
+                if (isMidi) {
+                    const bytes = Uint8Array.from(window.atob(entry.base64), (c) => c.charCodeAt(0));
+                    const generatedXml = convertMidiBufferToMusicXML(bytes.buffer, entry.label);
+                    await loadMusicXMLContent(generatedXml, entry.label);
+                    return;
+                } else if (isMxl) {
                     const binaryStr = window.atob(entry.base64);
                     await loadMusicXMLContent(binaryStr, entry.label);
                     return;
@@ -3844,7 +4508,11 @@
             if (!resp.ok) {
                 throw new Error(`HTTP ${resp.status}`);
             }
-            if (isMxl) {
+            if (isMidi) {
+                const buf = await resp.arrayBuffer();
+                const generatedXml = convertMidiBufferToMusicXML(buf, entry.label);
+                await loadMusicXMLContent(generatedXml, entry.label);
+            } else if (isMxl) {
                 const blob = await resp.blob();
                 const reader = new FileReader();
                 reader.onload = (e) => {
