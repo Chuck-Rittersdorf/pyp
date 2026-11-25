@@ -1657,6 +1657,7 @@
         syncGlobalSoundSelectUI();
         renderStaffHighlights();
         renderStaffBarNumbers();
+        renderStaffStartPartPointers();
 
         // Schedule audio parts only on initial score load (never interrupt active playback on visual re-render!)
         if (state.audioInitialized && !canFastRebuild) {
@@ -2140,7 +2141,14 @@
             const viewportW = box.clientWidth;
             const maxScrollX = Math.max(0, box.scrollWidth - viewportW);
             const anchorOffset = viewportW * CONFIG.CONTINUOUS_CURSOR_ANCHOR_X;
-            const desiredX = Math.max(0, Math.min(maxScrollX, (state.continuousPadX + interpX) - anchorOffset));
+            let desiredX = Math.max(0, Math.min(maxScrollX, (state.continuousPadX + interpX) - anchorOffset));
+
+            // When paused at the very start of the score (ticks === 0), keep the front of the staves
+            // and the "This is my part" arrow buttons in view on narrow mobile screens
+            if (!state.isPlaying && nowTicks <= 0) {
+                const maxStartScroll = Math.max(0, (state.continuousPadX || 0) - 108);
+                desiredX = Math.min(desiredX, maxStartScroll);
+            }
 
             if (snap) {
                 state.cameraScrollX = desiredX;
@@ -3021,6 +3029,186 @@
     }
 
     /**
+     * Toggles Highlight ('H') for a given partId:
+     * - Marks the part's staff in yellow, sets its volume to 100% and other parts to 70%.
+     * - Shared by the Part Mixer 'H' button and the "This is my part" arrow button in front of each staff.
+     */
+    function togglePartHighlight(partId) {
+        const part = state.parts[partId];
+        if (!part) return;
+
+        const willHighlight = !part.highlighted;
+        for (const p of Object.values(state.parts)) {
+            if (willHighlight) {
+                if (p.id === part.id) {
+                    p.highlighted = true;
+                    p.muted = false;
+                    p.volume = CONFIG.HIGHLIGHT_MAIN_VOLUME;
+                } else {
+                    p.highlighted = false;
+                    p.soloed = false;
+                    p.volume = CONFIG.HIGHLIGHT_OTHER_VOLUME;
+                }
+            } else {
+                p.highlighted = false;
+                p.volume = CONFIG.DEFAULT_PART_VOLUME;
+            }
+        }
+        renderPartMixerUI();
+        renderStaffHighlights();
+        renderStaffStartPartPointers();
+        refreshActiveNoteHighlightColors();
+        applyAllPartGains(false);
+        if (willHighlight) {
+            toast(`Highlighted ${part.name} (${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%)`);
+        }
+    }
+
+    /**
+     * Renders an interactive "This is my part" arrow button in front of each visible part's staff
+     * at the beginning of the score so users can highlight their part directly on the sheet music.
+     */
+    function renderStaffStartPartPointers() {
+        const box = dom.scoreDisplayArea;
+        const inner = box ? (box.querySelector('.osmd-score-inner') || box) : null;
+        if (!inner) return;
+
+        let layer = inner.querySelector('.staff-part-pointers-layer');
+        if (!state.scoreLoaded || !state.osmd) {
+            if (layer) layer.remove();
+            return;
+        }
+
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'staff-part-pointers-layer';
+            inner.appendChild(layer);
+        } else {
+            layer.innerHTML = '';
+        }
+
+        const osmd = state.osmd;
+        const effZoom = getEffectiveOsmdZoom();
+        const unitToPx = 10 * effZoom;
+
+        const staffToPartId = new Map();
+        const staffIndexToPartId = [];
+        if (osmd.sheet?.Instruments) {
+            osmd.sheet.Instruments.forEach((inst, instIdx) => {
+                const pid = inst.IdString || `part_${inst.Id ?? instIdx}`;
+                const isVisible = inst.Visible !== false;
+                if (Array.isArray(inst.Staves) && inst.Staves.length > 0) {
+                    for (const st of inst.Staves) {
+                        staffToPartId.set(st, pid);
+                        if (isVisible) {
+                            staffIndexToPartId.push(pid);
+                        }
+                    }
+                } else if (isVisible) {
+                    staffIndexToPartId.push(pid);
+                }
+            });
+        }
+
+        const entries = [];
+        const seenPartIds = new Set();
+        const firstSystem = osmd.GraphicSheet?.MusicPages?.[0]?.MusicSystems?.[0];
+
+        if (firstSystem && Array.isArray(firstSystem.StaffLines) && firstSystem.StaffLines.length > 0) {
+            for (let sIdx = 0; sIdx < firstSystem.StaffLines.length; sIdx++) {
+                const sl = firstSystem.StaffLines[sIdx];
+                if (!sl || !sl.PositionAndShape) continue;
+
+                const parentInst = sl.ParentStaff?.ParentInstrument;
+                const partId = staffToPartId.get(sl.ParentStaff) ||
+                    (parentInst ? (parentInst.IdString || `part_${parentInst.Id ?? 0}`) : null) ||
+                    staffIndexToPartId[sIdx];
+
+                if (!partId || seenPartIds.has(partId)) continue;
+                const part = state.parts[partId];
+                if (!part || part.hidden) continue;
+
+                const absPos = sl.PositionAndShape.AbsolutePosition;
+                const size = sl.PositionAndShape.Size;
+                if (!absPos || typeof absPos.x !== 'number' || typeof absPos.y !== 'number') continue;
+
+                seenPartIds.add(partId);
+                entries.push({
+                    part,
+                    staffStartX: absPos.x * unitToPx,
+                    staffTopY: absPos.y * unitToPx,
+                    staffHeightPx: ((size && size.height > 0) ? size.height : 4.0) * unitToPx,
+                });
+            }
+        } else if (Array.isArray(osmd.GraphicSheet?.MeasureList?.[0])) {
+            const firstCol = osmd.GraphicSheet.MeasureList[0];
+            for (let sIdx = 0; sIdx < firstCol.length; sIdx++) {
+                const gm = firstCol[sIdx];
+                const partId = staffIndexToPartId[sIdx];
+                if (!gm || !partId || seenPartIds.has(partId)) continue;
+                const part = state.parts[partId];
+                if (!part || part.hidden) continue;
+
+                const absPos = gm.PositionAndShape?.AbsolutePosition;
+                const size = gm.PositionAndShape?.Size;
+                if (!absPos || typeof absPos.x !== 'number' || typeof absPos.y !== 'number') continue;
+
+                seenPartIds.add(partId);
+                entries.push({
+                    part,
+                    staffStartX: absPos.x * unitToPx,
+                    staffTopY: absPos.y * unitToPx,
+                    staffHeightPx: ((size && size.height > 0) ? size.height : 4.0) * unitToPx,
+                });
+            }
+        }
+
+        if (entries.length === 0) return;
+
+        const frag = document.createDocumentFragment();
+        const padLeft = state.continuousScrollMode ? (state.continuousPadX || 0) : 0;
+        const minRightAnchorX = 104 - padLeft;
+
+        for (const item of entries) {
+            const { part, staffStartX, staffTopY } = item;
+            const isHighlighted = Boolean(part.highlighted);
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `staff-my-part-btn${isHighlighted ? ' active' : ''}`;
+            btn.title = isHighlighted
+                ? `${part.name} is highlighted — click to remove highlight`
+                : `Highlight ${part.name} ("This is my part")`;
+            btn.setAttribute('aria-pressed', String(isHighlighted));
+
+            // Position right in front of the staff start, just above the instrument name label
+            // so both the instrument name and the first bar number remain 100% readable
+            const rightAnchorX = Math.max(minRightAnchorX, staffStartX - 4 * effZoom);
+            const topAnchorY = Math.max(10, staffTopY - 5 * effZoom);
+
+            btn.style.left = `${rightAnchorX.toFixed(1)}px`;
+            btn.style.top = `${topAnchorY.toFixed(1)}px`;
+
+            btn.innerHTML = `
+                <span class="my-part-text">${isHighlighted ? 'My part' : 'This is my part'}</span>
+                <svg class="my-part-arrow" viewBox="0 0 18 14" width="13" height="11" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="1" y1="7" x2="15" y2="7"></line>
+                    <polyline points="10 2 15.5 7 10 12"></polyline>
+                </svg>
+            `;
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePartHighlight(part.id);
+            });
+
+            frag.appendChild(btn);
+        }
+
+        layer.appendChild(frag);
+    }
+
+    /**
      * Vertically centers the score in the viewport:
      * - When a part has Center ('C') selected: centers that part's staff in the exact vertical middle.
      * - Standard (no part has 'C' selected, even if a part is highlighted with 'H'): centers the whole score
@@ -3241,30 +3429,7 @@
             highlightBtn.title = `Highlight ${part.name} (Yellow staff marker, ${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%)`;
             highlightBtn.setAttribute('aria-pressed', String(Boolean(part.highlighted)));
             highlightBtn.addEventListener('click', () => {
-                const willHighlight = !part.highlighted;
-                for (const p of Object.values(state.parts)) {
-                    if (willHighlight) {
-                        if (p.id === part.id) {
-                            p.highlighted = true;
-                            p.muted = false;
-                            p.volume = CONFIG.HIGHLIGHT_MAIN_VOLUME;
-                        } else {
-                            p.highlighted = false;
-                            p.soloed = false;
-                            p.volume = CONFIG.HIGHLIGHT_OTHER_VOLUME;
-                        }
-                    } else {
-                        p.highlighted = false;
-                        p.volume = CONFIG.DEFAULT_PART_VOLUME;
-                    }
-                }
-                renderPartMixerUI();
-                renderStaffHighlights();
-                refreshActiveNoteHighlightColors();
-                applyAllPartGains(false);
-                if (willHighlight) {
-                    toast(`Highlighted ${part.name} (${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%)`);
-                }
+                togglePartHighlight(part.id);
             });
 
             const centerBtn = document.createElement('button');
@@ -5239,6 +5404,7 @@
                 } else {
                     renderPartMixerUI();
                     renderStaffHighlights();
+                    renderStaffStartPartPointers();
                     refreshActiveNoteHighlightColors();
                 }
                 if (state.audioInitialized && Object.keys(state.parts).length > 0) {
