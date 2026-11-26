@@ -829,6 +829,219 @@
         updateResetMixerVisibility();
     }
 
+    // ===========================================
+    // OS AUDIO FOCUS, MEDIA SESSION & USB/BLUETOOTH RECOVERY
+    // ===========================================
+
+    function getRawAudioContext() {
+        try {
+            const ctx = (typeof Tone.getContext === 'function' ? Tone.getContext() : Tone.context) || {};
+            return ctx.rawContext || ctx._context || ctx || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    /**
+     * Generates an in-memory 1-second 44.1kHz 16-bit PCM WAV data URL with an inaudible ±1 LSB (-90 dBFS) signal.
+     * Playing this in a hidden <audio loop> element during playback forces Android, iOS, Windows, and macOS
+     * to grant exclusive OS Media Audio Focus (automatically pausing background Podcasts, YouTube tabs, or Spotify)
+     * and prevents the OS from suspending Web Audio or dropping USB/Bluetooth audio routing.
+     */
+    function getOrCreateAudioFocusElement() {
+        if (state.focusAudioEl) return state.focusAudioEl;
+        try {
+            const sampleRate = 8000;
+            const numSamples = sampleRate; // 1 second loop
+            const dataBytes = numSamples * 2;
+            const buffer = new ArrayBuffer(44 + dataBytes);
+            const view = new DataView(buffer);
+
+            const writeStr = (offset, str) => {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+            };
+
+            writeStr(0, 'RIFF');
+            view.setUint32(4, 36 + dataBytes, true);
+            writeStr(8, 'WAVE');
+            writeStr(12, 'fmt ');
+            view.setUint32(16, 16, true); // PCM chunk size
+            view.setUint16(20, 1, true);  // AudioFormat = 1 (PCM)
+            view.setUint16(22, 1, true);  // NumChannels = 1
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);  // BlockAlign
+            view.setUint16(34, 16, true); // BitsPerSample
+            writeStr(36, 'data');
+            view.setUint32(40, dataBytes, true);
+
+            // Alternating ±1 LSB (-90.3 dBFS) so OS silence detectors treat it as an active media stream
+            for (let i = 0; i < numSamples; i++) {
+                view.setInt16(44 + i * 2, (i & 1) ? 1 : -1, true);
+            }
+
+            const blob = new Blob([buffer], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.loop = true;
+            audio.playsInline = true;
+            audio.preload = 'auto';
+            audio.volume = 0.01;
+            audio.setAttribute('playsinline', '');
+            audio.setAttribute('webkit-playsinline', '');
+            state.focusAudioEl = audio;
+            return audio;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function configureMediaSessionHandlers() {
+        if (state.mediaSessionConfigured || !('mediaSession' in navigator)) return;
+        state.mediaSessionConfigured = true;
+
+        const safeSetHandler = (action, fn) => {
+            try {
+                navigator.mediaSession.setActionHandler(action, fn);
+            } catch (_) { /* unsupported action */ }
+        };
+
+        safeSetHandler('play', () => {
+            if (!state.isPlaying && state.scoreLoaded) startPlayback();
+        });
+        safeSetHandler('pause', () => {
+            if (state.isPlaying) pausePlayback(true);
+        });
+        safeSetHandler('stop', () => {
+            if (state.scoreLoaded) stopPlayback();
+        });
+        safeSetHandler('previoustrack', () => {
+            if (state.scoreLoaded) stepBar(-1);
+        });
+        safeSetHandler('nexttrack', () => {
+            if (state.scoreLoaded) stepBar(1);
+        });
+    }
+
+    /**
+     * Claims OS Media Audio Focus so background apps (Podcasts, YouTube, Spotify) automatically pause
+     * and Bluetooth/USB audio interfaces lock onto PYP's playback stream.
+     */
+    function claimOsAudioFocus() {
+        try {
+            if (navigator.audioSession && navigator.audioSession.type !== 'playback') {
+                navigator.audioSession.type = 'playback';
+            }
+        } catch (_) { /* ignore */ }
+
+        const focusAudio = getOrCreateAudioFocusElement();
+        if (focusAudio && focusAudio.paused) {
+            const p = focusAudio.play();
+            if (p && typeof p.catch === 'function') {
+                p.catch(() => { /* ignore autoplay policy if outside gesture */ });
+            }
+        }
+
+        try {
+            if ('mediaSession' in navigator) {
+                configureMediaSessionHandlers();
+                if (typeof MediaMetadata === 'function') {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: state.scoreTitle || 'PYP Rehearsal Score',
+                        artist: 'PYP — Prepare Your Part',
+                        album: 'Score Rehearsal',
+                    });
+                }
+                navigator.mediaSession.playbackState = 'playing';
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    function releaseOsAudioFocus() {
+        try {
+            if (state.focusAudioEl && !state.focusAudioEl.paused) {
+                state.focusAudioEl.pause();
+            }
+        } catch (_) { /* ignore */ }
+
+        try {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    /**
+     * Automatically wakes up the Web Audio context if it was suspended or interrupted by another app,
+     * OS notification, or a USB / Bluetooth audio output route change.
+     */
+    async function keepAudioContextAlive(rebindDefaultSink = false) {
+        if (!state.audioInitialized) return;
+        const rawCtx = getRawAudioContext();
+        if (!rawCtx) return;
+
+        try {
+            if (rebindDefaultSink && typeof rawCtx.setSinkId === 'function') {
+                await rawCtx.setSinkId('');
+            }
+        } catch (_) { /* ignore sink rebind error */ }
+
+        try {
+            if (rawCtx.state === 'suspended' || rawCtx.state === 'interrupted') {
+                await rawCtx.resume();
+            }
+            if (typeof Tone.start === 'function' && Tone.context?.state !== 'running') {
+                await Tone.start();
+            }
+        } catch (_) { /* ignore */ }
+
+        if (state.isPlaying) {
+            claimOsAudioFocus();
+            if (Tone.Transport.state !== 'started') {
+                try {
+                    Tone.Transport.start(Tone.now());
+                } catch (_) { /* ignore */ }
+            }
+        }
+    }
+
+    function bindAudioDeviceAndContextRecovery() {
+        if (state.audioRecoveryBound) return;
+        state.audioRecoveryBound = true;
+
+        const rawCtx = getRawAudioContext();
+        if (rawCtx && typeof rawCtx.addEventListener === 'function') {
+            rawCtx.addEventListener('statechange', () => {
+                if (state.isPlaying && (rawCtx.state === 'suspended' || rawCtx.state === 'interrupted')) {
+                    keepAudioContextAlive(false);
+                }
+            });
+        }
+
+        // Handle USB DAC / headset & Bluetooth headphone hot-plugging without audio dropouts
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+            navigator.mediaDevices.addEventListener('devicechange', () => {
+                if (state.audioInitialized) {
+                    keepAudioContextAlive(true);
+                }
+            });
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && state.isPlaying) {
+                keepAudioContextAlive(false);
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            if (state.isPlaying) {
+                keepAudioContextAlive(false);
+            }
+        });
+    }
+
     async function ensureAudioReady() {
         if (state.audioReadyPromise) return state.audioReadyPromise;
         state.isLoadingAudio = true;
@@ -836,6 +1049,12 @@
 
         state.audioReadyPromise = (async () => {
             try {
+                try {
+                    if (navigator.audioSession) {
+                        navigator.audioSession.type = 'playback';
+                    }
+                } catch (_) { /* ignore */ }
+
                 if (!state.audioInitialized) {
                     await Tone.start();
                     // Set scheduling lookahead to 80ms (compensated in getAudibleTransportTicks) so UI interactions never starve audio
@@ -847,6 +1066,9 @@
                     } catch (_) { /* ignore */ }
                     ensureMasterAudioChain();
                     state.audioInitialized = true;
+                    bindAudioDeviceAndContextRecovery();
+                } else {
+                    await keepAudioContextAlive(false);
                 }
 
                 // Ensure all currently selected part instruments have their buffers loaded & nodes built
@@ -1000,8 +1222,18 @@
         }));
 
         state.playbackPart = new Tone.Part((audioTime, ev) => {
+            if (state.masterMuted || state.masterVolume <= 0) return;
             const part = state.parts[ev.partId];
-            if (!part || !part.instrument) return;
+            if (!part || !part.instrument || part.muted || part.volume <= 0) return;
+
+            const partList = Object.values(state.parts);
+            let anySoloed = false;
+            let anyHighlighted = false;
+            for (let i = 0; i < partList.length; i++) {
+                if (partList[i].soloed) anySoloed = true;
+                if (partList[i].highlighted) anyHighlighted = true;
+            }
+            if (anySoloed && !part.soloed) return;
 
             const def = INSTRUMENT_CATALOG[part.patchId] || INSTRUMENT_CATALOG.piano;
 
@@ -1015,7 +1247,6 @@
             const durationSec = Math.max(0.05, ev.durationWhole * secPerWhole * durFactor);
 
             // Enhance articulation contrast when a part is highlighted ('H')
-            const anyHighlighted = Object.values(state.parts).some((p) => p.highlighted);
             const noteVel = part.highlighted
                 ? Math.min(1, ev.velocity * 1.15)
                 : (anyHighlighted ? ev.velocity * 0.72 : ev.velocity);
@@ -1053,7 +1284,8 @@
 
     /**
      * Reuses the already-built Tone.Part instances on seek/skip (<0.1ms) instead of disposing and
-     * rebuilding 15,000+ timeline events (which previously blocked the main thread for 150-350ms).
+     * rebuilding 15,000+ timeline events. Uses cancel(0) + start(0) rather than stop(0) so Tone.Part's
+     * TimelineState at time 0 never gets stuck in a 'stopped' state.
      */
     function ensureTonePartsScheduled() {
         if (!state.playbackPart) {
@@ -1061,10 +1293,12 @@
             return;
         }
         try {
-            state.playbackPart.stop(0);
-            state.playbackPart.start(0);
-            if (state.metronomePart) {
-                state.metronomePart.stop(0);
+            if (state.playbackPart.state !== 'started') {
+                state.playbackPart.cancel(0);
+                state.playbackPart.start(0);
+            }
+            if (state.metronomePart && state.metronomePart.state !== 'started') {
+                state.metronomePart.cancel(0);
                 state.metronomePart.start(0);
             }
         } catch (_) {
@@ -2443,6 +2677,20 @@
             : (1 / 60);
         state.lastFrameTime = timestamp;
 
+        // Periodic watchdog (every ~400ms): automatically recover if the OS, another tab,
+        // or a USB/Bluetooth audio route transition suspended the AudioContext mid-playback
+        if (!state.lastAudioWatchdogTime || (timestamp - state.lastAudioWatchdogTime) > 400) {
+            state.lastAudioWatchdogTime = timestamp;
+            const rawCtx = getRawAudioContext();
+            if (rawCtx && (rawCtx.state === 'suspended' || rawCtx.state === 'interrupted')) {
+                keepAudioContextAlive(false);
+            } else if (state.audioInitialized && Tone.Transport.state !== 'started') {
+                try {
+                    Tone.Transport.start(Tone.now());
+                } catch (_) { /* ignore */ }
+            }
+        }
+
         const rawTicks = Math.max(0, Tone.Transport.ticks);
         const audibleTicks = getAudibleTransportTicks();
 
@@ -2517,6 +2765,7 @@
         if (state.audioInitialized) {
             Tone.Transport.stop();
         }
+        releaseOsAudioFocus();
         const inner = dom.scoreDisplayArea ? dom.scoreDisplayArea.querySelector('.osmd-score-inner') : null;
         if (inner) inner.style.transform = '';
         releaseAllInstruments();
@@ -2582,6 +2831,10 @@
 
         const ready = await ensureAudioReady();
         if (!ready) return;
+
+        // Claim OS Media Audio Focus immediately so background Podcasts, YouTube tabs, or Spotify pause
+        claimOsAudioFocus();
+        await keepAudioContextAlive(false);
 
         if (state.auditionRestoreTimer) {
             window.clearTimeout(state.auditionRestoreTimer);
@@ -2656,6 +2909,7 @@
         if (state.audioInitialized && Tone.Transport.state === 'started') {
             Tone.Transport.pause();
         }
+        releaseOsAudioFocus();
 
         const inner = dom.scoreDisplayArea ? dom.scoreDisplayArea.querySelector('.osmd-score-inner') : null;
         if (inner) inner.style.transform = '';
