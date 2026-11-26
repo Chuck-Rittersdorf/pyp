@@ -5031,6 +5031,10 @@
     const DEFAULT_SCORES_FOLDER_FILES = [
         'BWV248_01_jauchzet_frohlocket_johann_sebastian_bach.mxl',
         'Johann Kuhnau Magnificat/01_Magnifcat_anima_mea_Johann_Kuhnau.mxl',
+        'Johann Kuhnau Magnificat/04_Quia_fecit_mihi_magna_Johann_Kuhnau.mxl',
+        'Johann Kuhnau Magnificat/06_Fecit_potentiam_Johann_Kuhnau.mxl',
+        'Johann Kuhnau Magnificat/08_Sicut locutus est_Johann_Kuhnau.mxl',
+        'Johann Kuhnau Magnificat/10_Sicut_erat_in_principio_Johann_Kuhnau.mxl',
     ];
 
     const KNOWN_SCORE_SUBFOLDERS = [
@@ -5085,23 +5089,40 @@
         };
 
         // 1. Pre-bundled manifest entries (works on both file:// and http://)
+        let hasManifestEntries = false;
         if (Array.isArray(window.PYP_SCORES_MANIFEST)) {
             for (const item of window.PYP_SCORES_MANIFEST) {
                 if (!item || !item.fileName) continue;
                 registerEntry(item.fileName, item);
+                hasManifestEntries = true;
+            }
+        } else if (window.PYP_SCORES_MANIFEST && typeof window.PYP_SCORES_MANIFEST === 'object') {
+            for (const [fn, val] of Object.entries(window.PYP_SCORES_MANIFEST)) {
+                if (!fn) continue;
+                if (typeof val === 'string') {
+                    registerEntry(fn, { fileName: fn, base64: val });
+                    hasManifestEntries = true;
+                } else if (val && typeof val === 'object') {
+                    registerEntry(fn, val);
+                    hasManifestEntries = true;
+                }
             }
         }
 
-        // 2. Fallback known files in Scores/ and Scores/Johann Kuhnau Magnificat/
-        for (const fn of DEFAULT_SCORES_FOLDER_FILES) {
-            if (!entriesByFile.has(fn)) {
-                registerEntry(fn);
-            }
-        }
-
-        // 3. Any dynamically discovered files from Scores/ & subfolder directory listings
-        if (Array.isArray(state.discoveredScoresFolderFiles)) {
+        // 2. Any dynamically discovered files from Scores/ & subfolder HTTP directory listings
+        let hasDiscoveredEntries = false;
+        if (Array.isArray(state.discoveredScoresFolderFiles) && state.discoveredScoresFolderFiles.length > 0) {
+            hasDiscoveredEntries = true;
             for (const fn of state.discoveredScoresFolderFiles) {
+                if (!entriesByFile.has(fn)) {
+                    registerEntry(fn);
+                }
+            }
+        }
+
+        // 3. Fallback known files ONLY when neither scores-manifest.js nor HTTP directory discovery is available
+        if (!hasManifestEntries && !hasDiscoveredEntries) {
+            for (const fn of DEFAULT_SCORES_FOLDER_FILES) {
                 if (!entriesByFile.has(fn)) {
                     registerEntry(fn);
                 }
