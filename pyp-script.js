@@ -1382,12 +1382,24 @@
         const cursorSteps = [];
 
         if (!canFastRebuild) {
-            // Extract title / composer for header chip
-            const title = osmd.sheet.TitleString || osmd.sheet.Title?.text || '';
-            const composer = osmd.sheet.ComposerString || osmd.sheet.Composer?.text || '';
-            state.scoreTitle = title
-                ? (composer ? `${title} — ${composer}` : title)
-                : (state.scoreTitle || 'Untitled Score');
+            // Extract title / composer for header chip (ignore OSMD's default "Untitled Score" placeholder,
+            // and prefer the file-based title when loaded from a named file/catalog entry)
+            const rawTitle = (osmd.sheet.TitleString || osmd.sheet.Title?.text || '').trim();
+            const isUntitledPlaceholder = !rawTitle || /^untitled(\s+score)?$/i.test(rawTitle);
+            const title = isUntitledPlaceholder ? '' : rawTitle;
+            const composer = (osmd.sheet.ComposerString || osmd.sheet.Composer?.text || '').trim();
+            const hasCustomFileTitle = Boolean(
+                state.scoreTitle &&
+                state.scoreTitle !== 'Loaded Score' &&
+                !/^untitled(\s+score)?$/i.test(state.scoreTitle)
+            );
+            if (hasCustomFileTitle) {
+                state.scoreTitle = state.scoreTitle;
+            } else if (title) {
+                state.scoreTitle = composer ? `${title} — ${composer}` : title;
+            } else {
+                state.scoreTitle = 'Untitled Score';
+            }
             updateScoreTitleUI();
 
             // Extract base tempo
@@ -5030,11 +5042,11 @@
 
     const DEFAULT_SCORES_FOLDER_FILES = [
         'BWV248_01_jauchzet_frohlocket_johann_sebastian_bach.mxl',
-        'Johann Kuhnau Magnificat/01_Magnifcat_anima_mea_Johann_Kuhnau.mxl',
-        'Johann Kuhnau Magnificat/04_Quia_fecit_mihi_magna_Johann_Kuhnau.mxl',
-        'Johann Kuhnau Magnificat/06_Fecit_potentiam_Johann_Kuhnau.mxl',
-        'Johann Kuhnau Magnificat/08_Sicut locutus est_Johann_Kuhnau.mxl',
-        'Johann Kuhnau Magnificat/10_Sicut_erat_in_principio_Johann_Kuhnau.mxl',
+        'Johann Kuhnau Magnificat/01_Magnifcat_anima_mea.mxl',
+        'Johann Kuhnau Magnificat/04_Quia_fecit_mihi_magna.mxl',
+        'Johann Kuhnau Magnificat/06_Fecit_potentiam.mxl',
+        'Johann Kuhnau Magnificat/08_Sicut locutus est.mxl',
+        'Johann Kuhnau Magnificat/10_Sicut_erat_in_principio.mxl',
     ];
 
     const KNOWN_SCORE_SUBFOLDERS = [
@@ -5088,45 +5100,49 @@
             });
         };
 
-        // 1. Pre-bundled manifest entries (works on both file:// and http://)
-        let hasManifestEntries = false;
+        // Build lookup of pre-bundled manifest entries
+        const manifestByFile = new Map();
         if (Array.isArray(window.PYP_SCORES_MANIFEST)) {
             for (const item of window.PYP_SCORES_MANIFEST) {
                 if (!item || !item.fileName) continue;
-                registerEntry(item.fileName, item);
-                hasManifestEntries = true;
+                const norm = String(item.fileName).replace(/\\/g, '/').replace(/^Scores\//i, '');
+                manifestByFile.set(norm, item);
             }
         } else if (window.PYP_SCORES_MANIFEST && typeof window.PYP_SCORES_MANIFEST === 'object') {
             for (const [fn, val] of Object.entries(window.PYP_SCORES_MANIFEST)) {
                 if (!fn) continue;
+                const norm = String(fn).replace(/\\/g, '/').replace(/^Scores\//i, '');
                 if (typeof val === 'string') {
-                    registerEntry(fn, { fileName: fn, base64: val });
-                    hasManifestEntries = true;
+                    manifestByFile.set(norm, { fileName: norm, base64: val });
                 } else if (val && typeof val === 'object') {
-                    registerEntry(fn, val);
-                    hasManifestEntries = true;
+                    manifestByFile.set(norm, val);
                 }
             }
         }
 
-        // 2. Any dynamically discovered files from Scores/ & subfolder HTTP directory listings
-        let hasDiscoveredEntries = false;
-        if (Array.isArray(state.discoveredScoresFolderFiles) && state.discoveredScoresFolderFiles.length > 0) {
-            hasDiscoveredEntries = true;
+        // 1. If live HTTP directory scan succeeded, use the live disk filenames as authoritative
+        //    (so renamed/deleted files update immediately on refresh even before running update-scores.bat)
+        const hasDiscoveredEntries = Array.isArray(state.discoveredScoresFolderFiles) && state.discoveredScoresFolderFiles.length > 0;
+        if (hasDiscoveredEntries) {
             for (const fn of state.discoveredScoresFolderFiles) {
-                if (!entriesByFile.has(fn)) {
-                    registerEntry(fn);
-                }
+                const norm = String(fn).replace(/\\/g, '/').replace(/^Scores\//i, '');
+                const manifestItem = manifestByFile.get(norm) || {};
+                registerEntry(norm, manifestItem);
             }
+            return Array.from(entriesByFile.values());
+        }
+
+        // 2. Otherwise use pre-bundled manifest entries (works on file:// and static hosts)
+        if (manifestByFile.size > 0) {
+            for (const [norm, item] of manifestByFile.entries()) {
+                registerEntry(norm, item);
+            }
+            return Array.from(entriesByFile.values());
         }
 
         // 3. Fallback known files ONLY when neither scores-manifest.js nor HTTP directory discovery is available
-        if (!hasManifestEntries && !hasDiscoveredEntries) {
-            for (const fn of DEFAULT_SCORES_FOLDER_FILES) {
-                if (!entriesByFile.has(fn)) {
-                    registerEntry(fn);
-                }
-            }
+        for (const fn of DEFAULT_SCORES_FOLDER_FILES) {
+            registerEntry(fn);
         }
 
         return Array.from(entriesByFile.values());
