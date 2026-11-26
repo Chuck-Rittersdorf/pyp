@@ -211,8 +211,32 @@ select {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 160px;
+    max-height: 220px;
     overflow-y: auto;
+}
+
+.score-subfolder-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+}
+
+.score-subfolder-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--accent);
+    padding: 1px 2px 2px;
+}
+
+.score-subfolder-group .score-folder-item-btn {
+    background: var(--surface);
 }
 
 .score-folder-item-btn {

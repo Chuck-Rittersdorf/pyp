@@ -5025,12 +5025,32 @@
     }
 
     // ===========================================
-    // 'SCORES' FOLDER CATALOG & LOADER
+    // 'SCORES' FOLDER & SUBFOLDER CATALOG & LOADER
     // ===========================================
 
     const DEFAULT_SCORES_FOLDER_FILES = [
         'BWV248_01_jauchzet_frohlocket_johann_sebastian_bach.mxl',
+        'Johann Kuhnau Magnificat/01_Magnifcat_anima_mea_Johann_Kuhnau.mxl',
     ];
+
+    const KNOWN_SCORE_SUBFOLDERS = [
+        'Johann Kuhnau Magnificat',
+    ];
+
+    function extractFolderFromRelPath(relPath) {
+        const normalized = String(relPath || '').replace(/\\/g, '/').replace(/^Scores\//i, '');
+        const lastSlash = normalized.lastIndexOf('/');
+        return lastSlash > 0 ? normalized.slice(0, lastSlash) : '';
+    }
+
+    function encodeScoreRelativePath(relPath) {
+        const normalized = String(relPath || '').replace(/\\/g, '/').replace(/^Scores\//i, '');
+        return normalized
+            .split('/')
+            .filter(Boolean)
+            .map((seg) => encodeURIComponent(seg))
+            .join('/');
+    }
 
     function formatScoreFileLabel(fileName) {
         const base = String(fileName || '')
@@ -5049,44 +5069,41 @@
     function getScoresFolderEntries() {
         const entriesByFile = new Map();
 
+        const registerEntry = (rawFileName, item = {}) => {
+            const relFileName = String(rawFileName || '').replace(/\\/g, '/').replace(/^Scores\//i, '');
+            if (!relFileName) return;
+            const folder = item.folder !== undefined ? item.folder : extractFolderFromRelPath(relFileName);
+            const existing = entriesByFile.get(relFileName);
+            entriesByFile.set(relFileName, {
+                fileName: relFileName,
+                folder,
+                path: item.path || `Scores/${relFileName}`,
+                format: (item.format || relFileName.split('.').pop() || 'mxl').toLowerCase(),
+                base64: item.base64 || existing?.base64 || null,
+                label: item.label || existing?.label || formatScoreFileLabel(relFileName),
+            });
+        };
+
         // 1. Pre-bundled manifest entries (works on both file:// and http://)
         if (Array.isArray(window.PYP_SCORES_MANIFEST)) {
             for (const item of window.PYP_SCORES_MANIFEST) {
                 if (!item || !item.fileName) continue;
-                entriesByFile.set(item.fileName, {
-                    fileName: item.fileName,
-                    path: item.path || `Scores/${item.fileName}`,
-                    format: (item.format || item.fileName.split('.').pop() || 'mxl').toLowerCase(),
-                    base64: item.base64 || null,
-                    label: item.label || formatScoreFileLabel(item.fileName),
-                });
+                registerEntry(item.fileName, item);
             }
         }
 
-        // 2. Fallback known files in Scores/
+        // 2. Fallback known files in Scores/ and Scores/Johann Kuhnau Magnificat/
         for (const fn of DEFAULT_SCORES_FOLDER_FILES) {
             if (!entriesByFile.has(fn)) {
-                entriesByFile.set(fn, {
-                    fileName: fn,
-                    path: `Scores/${fn}`,
-                    format: (fn.split('.').pop() || 'mxl').toLowerCase(),
-                    base64: null,
-                    label: formatScoreFileLabel(fn),
-                });
+                registerEntry(fn);
             }
         }
 
-        // 3. Any dynamically discovered files from Scores/ directory listing
+        // 3. Any dynamically discovered files from Scores/ & subfolder directory listings
         if (Array.isArray(state.discoveredScoresFolderFiles)) {
             for (const fn of state.discoveredScoresFolderFiles) {
                 if (!entriesByFile.has(fn)) {
-                    entriesByFile.set(fn, {
-                        fileName: fn,
-                        path: `Scores/${fn}`,
-                        format: (fn.split('.').pop() || 'mxl').toLowerCase(),
-                        base64: null,
-                        label: formatScoreFileLabel(fn),
-                    });
+                    registerEntry(fn);
                 }
             }
         }
@@ -5094,25 +5111,64 @@
         return Array.from(entriesByFile.values());
     }
 
+    async function scanHttpDirectoryForScores(dirPrefix = '') {
+        const cleanPrefix = String(dirPrefix || '').replace(/^\/+|\/+$/g, '');
+        const urlPath = cleanPrefix
+            ? `Scores/${encodeScoreRelativePath(cleanPrefix)}/`
+            : 'Scores/';
+        const resp = await fetch(urlPath);
+        if (!resp.ok) return { files: [], subfolders: [] };
+
+        const html = await resp.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const links = doc.querySelectorAll('a[href]');
+        const files = [];
+        const subfolders = [];
+
+        links.forEach((a) => {
+            const rawHref = a.getAttribute('href') || '';
+            const stripped = rawHref.split('?')[0].split('#')[0];
+            if (!stripped || stripped === '../' || stripped === './' || stripped === '/') return;
+
+            const decoded = decodeURIComponent(stripped).replace(/\\/g, '/');
+            const isDir = decoded.endsWith('/');
+            const trimmed = decoded.replace(/\/+$/, '');
+            const baseName = trimmed.replace(/^.*\//, '');
+            if (!baseName || baseName.startsWith('.')) return;
+
+            if (isDir && !cleanPrefix) {
+                subfolders.push(baseName);
+            } else if (/\.(mxl|musicxml|xml|midi|mid)$/i.test(baseName)) {
+                files.push(cleanPrefix ? `${cleanPrefix}/${baseName}` : baseName);
+            }
+        });
+
+        return { files, subfolders };
+    }
+
     async function discoverScoresFolderOverHttp() {
         if (window.location.protocol === 'file:') return;
         try {
-            const resp = await fetch('Scores/');
-            if (!resp.ok) return;
-            const html = await resp.text();
-            const doc = new DOMParser().parseFromString(html, 'text/html');
-            const links = doc.querySelectorAll('a[href]');
-            const found = [];
-            links.forEach((a) => {
-                const rawHref = a.getAttribute('href') || '';
-                const decoded = decodeURIComponent(rawHref.split('?')[0].split('#')[0]);
-                const fileName = decoded.replace(/^.*[\\/]/, '');
-                if (/\.(mxl|musicxml|xml|midi|mid)$/i.test(fileName)) {
-                    found.push(fileName);
-                }
-            });
-            if (found.length > 0) {
-                state.discoveredScoresFolderFiles = found;
+            const rootResult = await scanHttpDirectoryForScores('');
+            const allFiles = [...rootResult.files];
+            const foldersToScan = new Set([
+                ...KNOWN_SCORE_SUBFOLDERS,
+                ...rootResult.subfolders,
+            ]);
+
+            for (const sub of foldersToScan) {
+                try {
+                    const subResult = await scanHttpDirectoryForScores(sub);
+                    for (const f of subResult.files) {
+                        if (!allFiles.includes(f)) {
+                            allFiles.push(f);
+                        }
+                    }
+                } catch (_) { /* ignore subfolder without listing */ }
+            }
+
+            if (allFiles.length > 0) {
+                state.discoveredScoresFolderFiles = allFiles;
                 renderScoresFolderUI();
             }
         } catch (_) {
@@ -5122,13 +5178,15 @@
 
     async function loadScoreFromScoresFolder(fileName) {
         if (!fileName) return;
+        const normalizedFile = String(fileName).replace(/\\/g, '/').replace(/^Scores\//i, '');
         const entries = getScoresFolderEntries();
-        const entry = entries.find((e) => e.fileName === fileName) || {
-            fileName,
-            path: `Scores/${fileName}`,
-            format: (fileName.split('.').pop() || 'mxl').toLowerCase(),
+        const entry = entries.find((e) => e.fileName === normalizedFile) || {
+            fileName: normalizedFile,
+            folder: extractFolderFromRelPath(normalizedFile),
+            path: `Scores/${normalizedFile}`,
+            format: (normalizedFile.split('.').pop() || 'mxl').toLowerCase(),
             base64: null,
-            label: formatScoreFileLabel(fileName),
+            label: formatScoreFileLabel(normalizedFile),
         };
 
         const isMxl = entry.format === 'mxl' || entry.fileName.toLowerCase().endsWith('.mxl');
@@ -5157,9 +5215,9 @@
             }
         }
 
-        // 2. Otherwise fetch from Scores/<fileName> over HTTP
+        // 2. Otherwise fetch from Scores/<relPath> over HTTP (encoding each path segment safely)
         try {
-            const encodedPath = `Scores/${encodeURIComponent(entry.fileName)}`;
+            const encodedPath = `Scores/${encodeScoreRelativePath(entry.fileName)}`;
             const resp = await fetch(encodedPath);
             if (!resp.ok) {
                 throw new Error(`HTTP ${resp.status}`);
@@ -5191,23 +5249,49 @@
     function renderScoresFolderUI() {
         const entries = getScoresFolderEntries();
 
-        // 1. Top Toolbar dropdown
+        // Group entries by folder (root files vs subfolder collections such as "Johann Kuhnau Magnificat")
+        const rootEntries = entries.filter((e) => !e.folder);
+        const foldersMap = new Map();
+        for (const entry of entries) {
+            if (!entry.folder) continue;
+            if (!foldersMap.has(entry.folder)) {
+                foldersMap.set(entry.folder, []);
+            }
+            foldersMap.get(entry.folder).push(entry);
+        }
+
+        // 1. Top Toolbar dropdown (with <optgroup> for subfolders like "Johann Kuhnau Magnificat")
         if (dom.scoresFolderSelect) {
             const currentVal = dom.scoresFolderSelect.value;
             dom.scoresFolderSelect.innerHTML = '<option value="">Scores Folder…</option>';
-            for (const entry of entries) {
+
+            for (const [folderName, folderEntries] of foldersMap.entries()) {
+                const group = document.createElement('optgroup');
+                group.label = folderName;
+                for (const entry of folderEntries) {
+                    const opt = document.createElement('option');
+                    opt.value = entry.fileName;
+                    opt.textContent = entry.label;
+                    opt.title = `Scores/${entry.fileName}`;
+                    group.appendChild(opt);
+                }
+                dom.scoresFolderSelect.appendChild(group);
+            }
+
+            for (const entry of rootEntries) {
                 const opt = document.createElement('option');
                 opt.value = entry.fileName;
                 opt.textContent = entry.label;
                 opt.title = `Scores/${entry.fileName}`;
                 dom.scoresFolderSelect.appendChild(opt);
             }
+
             if (currentVal && entries.some((e) => e.fileName === currentVal)) {
                 dom.scoresFolderSelect.value = currentVal;
             }
         }
 
-        // 2. Welcome Screen Scores Folder list
+        // 2. Welcome Screen Scores Folder list (with folder headers for subfolders)
         const sectionEl = document.getElementById('welcomeScoresFolderSection');
         const listEl = document.getElementById('welcomeScoresFolderList');
         if (sectionEl && listEl) {
@@ -5218,7 +5302,8 @@
             }
             sectionEl.hidden = false;
             const frag = document.createDocumentFragment();
-            for (const entry of entries) {
+
+            const createScoreButton = (entry) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'score-folder-item-btn';
@@ -5238,8 +5323,33 @@
                     }
                     loadScoreFromScoresFolder(entry.fileName);
                 });
-                frag.appendChild(btn);
+                return btn;
+            };
+
+            for (const [folderName, folderEntries] of foldersMap.entries()) {
+                const folderGroup = document.createElement('div');
+                folderGroup.className = 'score-subfolder-group';
+
+                const folderHeader = document.createElement('div');
+                folderHeader.className = 'score-subfolder-title';
+                folderHeader.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>${folderName}</span>
+                `;
+                folderGroup.appendChild(folderHeader);
+
+                for (const entry of folderEntries) {
+                    folderGroup.appendChild(createScoreButton(entry));
+                }
+                frag.appendChild(folderGroup);
             }
+
+            for (const entry of rootEntries) {
+                frag.appendChild(createScoreButton(entry));
+            }
+
             listEl.appendChild(frag);
         }
     }
