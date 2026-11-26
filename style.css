@@ -370,6 +370,15 @@ select {
     background: #0369A1;
 }
 
+.play-pause-btn:not(.playing) .icon-pause,
+.play-pause-btn.playing .icon-play,
+.play-pause-btn.loading .icon-play,
+.play-pause-btn.loading .icon-pause,
+.vp-hud-play:not(.playing) .icon-pause,
+.vp-hud-play.playing .icon-play {
+    display: none !important;
+}
+
 .play-status-spinner {
     width: 16px;
     height: 16px;

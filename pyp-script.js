@@ -3005,6 +3005,18 @@
     // UI RENDERERS & UPDATES
     // ===========================================
 
+    function setElHidden(el, isHidden) {
+        if (!el) return;
+        const hide = Boolean(isHidden);
+        el.hidden = hide;
+        el.style.display = hide ? 'none' : '';
+        if (hide) {
+            el.setAttribute('hidden', '');
+        } else {
+            el.removeAttribute('hidden');
+        }
+    }
+
     function updatePlayPauseButtonUI() {
         const btn = dom.playPauseButton;
         if (!btn) return;
@@ -3014,35 +3026,40 @@
         const spinner = dom.audioLoadingSpinner;
 
         btn.disabled = !state.scoreLoaded || !state.notes.length || state.isLoadingAudio;
-        btn.classList.toggle('playing', state.isPlaying);
+        btn.classList.toggle('playing', Boolean(state.isPlaying && !state.isLoadingAudio));
+        btn.classList.toggle('loading', Boolean(state.isLoadingAudio));
 
         if (state.isLoadingAudio) {
-            if (playIcon) playIcon.hidden = true;
-            if (pauseIcon) pauseIcon.hidden = true;
-            if (spinner) spinner.hidden = false;
+            setElHidden(playIcon, true);
+            setElHidden(pauseIcon, true);
+            setElHidden(spinner, false);
             btn.title = 'Loading instrument samples…';
             btn.setAttribute('aria-label', 'Loading audio');
+            btn.setAttribute('aria-pressed', 'false');
         } else if (state.isPlaying) {
-            if (playIcon) playIcon.hidden = true;
-            if (pauseIcon) pauseIcon.hidden = false;
-            if (spinner) spinner.hidden = true;
+            setElHidden(playIcon, true);
+            setElHidden(pauseIcon, false);
+            setElHidden(spinner, true);
             btn.title = 'Pause (Space)';
             btn.setAttribute('aria-label', 'Pause');
+            btn.setAttribute('aria-pressed', 'true');
         } else {
-            if (playIcon) playIcon.hidden = false;
-            if (pauseIcon) pauseIcon.hidden = true;
-            if (spinner) spinner.hidden = true;
+            setElHidden(playIcon, false);
+            setElHidden(pauseIcon, true);
+            setElHidden(spinner, true);
             btn.title = 'Play (Space)';
             btn.setAttribute('aria-label', 'Play');
+            btn.setAttribute('aria-pressed', 'false');
         }
 
         // Sync floating score-viewport Play/Pause button
         if (dom.viewportFloatingPlayBtn) {
             dom.viewportFloatingPlayBtn.disabled = btn.disabled;
+            dom.viewportFloatingPlayBtn.classList.toggle('playing', Boolean(state.isPlaying));
             const fPlay = dom.viewportFloatingPlayBtn.querySelector('.icon-play');
             const fPause = dom.viewportFloatingPlayBtn.querySelector('.icon-pause');
-            if (fPlay) fPlay.hidden = state.isPlaying;
-            if (fPause) fPause.hidden = !state.isPlaying;
+            setElHidden(fPlay, state.isPlaying);
+            setElHidden(fPause, !state.isPlaying);
         }
     }
 
