@@ -4821,9 +4821,9 @@
             { div: 24, type: 'quarter', dot: false },
             { div: 18, type: 'eighth', dot: true },
             { div: 12, type: 'eighth', dot: false },
-            { div: 9,  type: '16th', dot: true },
-            { div: 6,  type: '16th', dot: false },
-            { div: 3,  type: '32nd', dot: false },
+            { div: 9, type: '16th', dot: true },
+            { div: 6, type: '16th', dot: false },
+            { div: 3, type: '32nd', dot: false },
         ];
 
         const decomposeDuration = (durDiv) => {
@@ -5041,6 +5041,7 @@
     // ===========================================
 
     const DEFAULT_SCORES_FOLDER_FILES = [
+        'BWV110_01_Chorus_Unser_Mund_sei_voll_Lachens.mxl',
         'BWV248_01_jauchzet_frohlocket_johann_sebastian_bach.mxl',
         'Johann Kuhnau Magnificat/01_Magnifcat_anima_mea.mxl',
         'Johann Kuhnau Magnificat/04_Quia_fecit_mihi_magna.mxl',
