@@ -445,9 +445,9 @@ select {
 }
 
 .loop-range-inputs input[type="number"] {
-    width: 44px;
+    width: 58px;
     height: 22px;
-    padding: 0 4px;
+    padding: 0 5px;
     border: 1px solid rgba(13, 148, 136, 0.4);
     border-radius: 4px;
     background: var(--surface);
@@ -783,6 +783,15 @@ body.viewport-fullscreen .viewport-floating-hud {
 .note-highlighted-part {
     fill: #FF0090 !important;
     stroke: #FF0090 !important;
+}
+
+/* Teal highlight on the exact A and B anchor notes of a note-precise A-B loop */
+.note-loop-anchor path,
+.note-loop-anchor ellipse,
+.note-loop-anchor circle,
+.note-loop-anchor {
+    fill: #0D9488 !important;
+    stroke: #0D9488 !important;
 }
 
 /* Soft transparent yellow marker highlight band rendered BEHIND the staff so notes stay pure black */
@@ -2265,10 +2274,10 @@ kbd {
     }
 
     .loop-range-inputs input[type="number"] {
-        width: 32px;
+        width: 46px;
         height: 19px;
         font-size: 10.5px;
-        padding: 0 2px;
+        padding: 0 3px;
     }
 
     .segmented-control {

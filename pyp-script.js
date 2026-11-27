@@ -216,8 +216,14 @@
         loopEnabled: false,
         loopStartBar: 1,
         loopEndBar: 4,
-        loopPickMode: null,      // null | 'awaiting-start' | 'awaiting-end'
-        loopPickAnchorBar: null, // 1-based bar number for point A while awaiting point B
+        loopCustomStartTicks: null, // Exact note-A onset tick when selected on the score
+        loopCustomEndTicks: null,   // Exact note-B end tick (onset + duration) when selected on the score
+        loopPickMode: null,         // null | 'awaiting-start' | 'awaiting-end'
+        loopPickSource: null,       // null | 'shift' | 'touch' | 'button' | 'bar-badge'
+        loopPickAnchor: null,       // { barNumber, startTicks, endTicks, svgEl }
+        loopPickAnchorBar: null,    // 1-based bar number for point A while awaiting point B
+        loopAnchorSvgA: null,
+        loopAnchorSvgB: null,
         metronomeEnabled: false,
 
         // Audio Engine & Multi-Instrument Sample Cache
@@ -504,6 +510,16 @@
     }
 
     function getLoopBoundsTicks() {
+        if (
+            typeof state.loopCustomStartTicks === 'number' &&
+            typeof state.loopCustomEndTicks === 'number' &&
+            state.loopCustomEndTicks > state.loopCustomStartTicks
+        ) {
+            return {
+                startTicks: Math.max(0, state.loopCustomStartTicks),
+                endTicks: Math.min(state.totalMusicalTicks, state.loopCustomEndTicks),
+            };
+        }
         if (!state.barData.length) return { startTicks: 0, endTicks: state.totalMusicalTicks };
         const startIdx = Math.max(0, Math.min(state.barData.length - 1, state.loopStartBar - 1));
         const endIdx = Math.max(startIdx, Math.min(state.barData.length - 1, state.loopEndBar - 1));
@@ -3238,19 +3254,57 @@
             if (!activeMode || !state.scoreLoaded) {
                 dom.loopPickBanner.hidden = true;
             } else if (activeMode === 'awaiting-start') {
-                dom.loopPickBannerText.textContent = 'Loop A–B: Click or tap start note/bar (A) on the score…';
+                dom.loopPickBannerText.textContent = 'Loop A–B: Click or tap start note (A) on the score…';
                 dom.loopPickBanner.hidden = false;
             } else if (activeMode === 'awaiting-end') {
-                dom.loopPickBannerText.textContent = `Loop Start (A): Bar ${state.loopPickAnchorBar} — Click or tap end note/bar (B)…`;
+                const hint = state.loopPickSource === 'shift'
+                    ? 'Shift+Click end note (B) to start loop…'
+                    : 'Tap end note (B) to start loop…';
+                dom.loopPickBannerText.textContent = `Loop Start (A): Bar ${state.loopPickAnchorBar} — ${hint}`;
                 dom.loopPickBanner.hidden = false;
             }
         }
         updateStaffBarNumberLoopMarkers();
+        refreshLoopNoteAnchorHighlights();
+    }
+
+    function clearLoopNoteAnchorHighlights() {
+        const box = dom.scoreDisplayArea;
+        if (box) {
+            box.querySelectorAll('.note-loop-anchor').forEach((el) => {
+                el.classList.remove('note-loop-anchor');
+            });
+        }
+        state.loopAnchorSvgA = null;
+        state.loopAnchorSvgB = null;
+    }
+
+    function refreshLoopNoteAnchorHighlights() {
+        const box = dom.scoreDisplayArea;
+        if (!box) return;
+        box.querySelectorAll('.note-loop-anchor').forEach((el) => {
+            el.classList.remove('note-loop-anchor');
+        });
+        if (state.loopPickMode === 'awaiting-end' && state.loopPickAnchor?.svgEl) {
+            state.loopPickAnchor.svgEl.classList.add('note-loop-anchor');
+            return;
+        }
+        if (state.loopEnabled) {
+            if (state.loopAnchorSvgA) state.loopAnchorSvgA.classList.add('note-loop-anchor');
+            if (state.loopAnchorSvgB) state.loopAnchorSvgB.classList.add('note-loop-anchor');
+        }
     }
 
     function cancelLoopPickMode() {
-        if (!state.loopPickMode && state.loopPickAnchorBar === null) return;
+        if (!state.loopEnabled) {
+            state.loopCustomStartTicks = null;
+            state.loopCustomEndTicks = null;
+            clearLoopNoteAnchorHighlights();
+        }
+        if (!state.loopPickMode && state.loopPickAnchorBar === null && !state.loopPickAnchor) return;
         state.loopPickMode = null;
+        state.loopPickSource = null;
+        state.loopPickAnchor = null;
         state.loopPickAnchorBar = null;
         syncLoopPickBannerUI();
     }
@@ -3300,42 +3354,89 @@
     }
 
     /**
-     * Handles selecting point A or point B of an A–B Bar Loop directly on the score
+     * Handles selecting point A or point B of a note-precise (or bar-based) A–B Loop directly on the score
      * (via Shift+Click, Mobile Long-Press, Pick A–B mode, or tapping Bar Number badges).
      */
-    function selectLoopBarPointOnScore(clickedBarNum) {
+    function selectLoopPointOnScore({ barNumber, startTicks, endTicks, svgEl = null, source = 'shift' }) {
         if (!state.scoreLoaded || !state.barData.length) return;
         const maxBar = state.barData[state.barData.length - 1]?.barNumber || state.barData.length;
-        const clampedBar = Math.max(1, Math.min(maxBar, clickedBarNum));
+        const clampedBar = Math.max(1, Math.min(maxBar, barNumber));
+        const barObj = state.barData.find((b) => b.barNumber === clampedBar) || state.barData[clampedBar - 1];
+        const ptStartTicks = typeof startTicks === 'number' ? startTicks : (barObj ? barObj.startTicks : 0);
+        const ptEndTicks = typeof endTicks === 'number' ? endTicks : (barObj ? barObj.endTicks : state.totalMusicalTicks);
 
-        if (state.loopPickMode !== 'awaiting-end' || typeof state.loopPickAnchorBar !== 'number') {
-            // Set Point A (Start Anchor)
+        if (state.loopPickMode !== 'awaiting-end' || !state.loopPickAnchor) {
+            // Set Point A (Start Note / Bar Anchor)
+            state.loopPickAnchor = {
+                barNumber: clampedBar,
+                startTicks: ptStartTicks,
+                endTicks: ptEndTicks,
+                svgEl,
+            };
             state.loopPickAnchorBar = clampedBar;
             state.loopPickMode = 'awaiting-end';
+            state.loopPickSource = source;
             syncLoopPickBannerUI();
 
-            const barObj = state.barData.find((b) => b.barNumber === clampedBar) || state.barData[clampedBar - 1];
-            if (barObj) {
-                seekToTicks(barObj.startTicks, { snapScroll: false, keepPlaying: state.isPlaying, keepViewport: !state.isPlaying });
-            }
-            toast(`Loop Start (A): Bar ${clampedBar} — click or tap end note/bar (B)`, 'info', 2800);
+            seekToTicks(ptStartTicks, { snapScroll: false, keepPlaying: state.isPlaying, keepViewport: !state.isPlaying });
+            const nextActionHint = source === 'shift' ? 'Shift+Click second note (B)' : 'tap second note (B)';
+            toast(`Loop Start (A) set in Bar ${clampedBar} — ${nextActionHint}`, 'info', 2800);
         } else {
-            // Set Point B (Complete A-B Loop)
-            const startBar = Math.min(state.loopPickAnchorBar, clampedBar);
-            const endBar = Math.max(state.loopPickAnchorBar, clampedBar);
-            state.loopStartBar = startBar;
-            state.loopEndBar = endBar;
+            // Set Point B (Complete Note-Precise A-B Loop)
+            const ptA = state.loopPickAnchor;
+            const ptB = {
+                barNumber: clampedBar,
+                startTicks: ptStartTicks,
+                endTicks: ptEndTicks,
+                svgEl,
+            };
+
+            const firstPt = ptA.startTicks <= ptB.startTicks ? ptA : ptB;
+            const secondPt = ptA.startTicks <= ptB.startTicks ? ptB : ptA;
+
+            const minNoteSpan = Math.max(12, Math.round(state.ticksPerWhole * 0.0625));
+            state.loopCustomStartTicks = Math.max(0, firstPt.startTicks);
+            state.loopCustomEndTicks = Math.min(
+                state.totalMusicalTicks,
+                Math.max(firstPt.startTicks + minNoteSpan, secondPt.endTicks)
+            );
+            state.loopStartBar = firstPt.barNumber;
+            state.loopEndBar = secondPt.barNumber;
+            state.loopAnchorSvgA = firstPt.svgEl || null;
+            state.loopAnchorSvgB = secondPt.svgEl || null;
             state.loopEnabled = true;
+
             state.loopPickMode = null;
+            state.loopPickSource = null;
+            state.loopPickAnchor = null;
             state.loopPickAnchorBar = null;
 
             syncLoopInputsUI();
             syncLoopPickBannerUI();
 
-            const { startTicks } = getLoopBoundsTicks();
-            seekToTicks(startTicks, { snapScroll: false, keepPlaying: state.isPlaying, keepViewport: !state.isPlaying, glideCamera: state.isPlaying });
-            toast(`Loop enabled: Bars ${startBar}–${endBar}`, 'success', 2800);
+            seekToTicks(state.loopCustomStartTicks, {
+                snapScroll: false,
+                keepPlaying: state.isPlaying,
+                keepViewport: !state.isPlaying,
+                glideCamera: state.isPlaying,
+            });
+            const rangeLabel = firstPt.barNumber === secondPt.barNumber
+                ? `Bar ${firstPt.barNumber}`
+                : `Bars ${firstPt.barNumber}–${secondPt.barNumber}`;
+            toast(`Note Loop enabled (${rangeLabel})`, 'success', 2800);
         }
+    }
+
+    function selectLoopBarPointOnScore(clickedBarNum) {
+        if (!state.scoreLoaded || !state.barData.length) return;
+        const barObj = state.barData.find((b) => b.barNumber === clickedBarNum) || state.barData[clickedBarNum - 1];
+        selectLoopPointOnScore({
+            barNumber: clickedBarNum,
+            startTicks: barObj ? barObj.startTicks : 0,
+            endTicks: barObj ? barObj.endTicks : state.totalMusicalTicks,
+            svgEl: null,
+            source: 'bar-badge',
+        });
     }
 
     function updateLoopTrackHighlight() {
@@ -5668,12 +5769,33 @@
             ? state.barData[bestStep.measureIndex].startTicks
             : bestStep.ticks;
 
-        // Quick A-B Loop Selection:
-        // - Desktop: Shift + Click on two notes/bars (or Shift+Click first note, then click second note)
-        // - Mobile / Touch: Long-Press (~420ms) on first note/bar, then tap second note/bar (or use "Pick A-B" button)
-        if (forceLoopPick || event.shiftKey || state.loopPickMode) {
+        const nextStep = state.cursorSteps[bestStep.stepIdx + 1];
+        const noteDurationTicks = (clickedNote && clickedNote.durationWhole > 0)
+            ? Math.max(12, Math.round(clickedNote.durationWhole * state.ticksPerWhole))
+            : (nextStep && nextStep.ticks > targetSeekTicks
+                ? Math.max(12, nextStep.ticks - targetSeekTicks)
+                : Math.round(state.ticksPerWhole * 0.25));
+        const targetNoteEndTicks = Math.min(state.totalMusicalTicks, targetSeekTicks + noteDurationTicks);
+
+        // Quick Note-Precise A-B Loop Selection:
+        // - Desktop: Shift + Click on two notes sets exact note-to-note loop
+        // - Mobile / Touch: Long-Press (~420ms) on first note, then tap second note (or use "Pick A-B" button)
+        const isTouchOrButtonPickActive = Boolean(
+            state.loopPickMode &&
+            (state.loopPickSource === 'touch' || state.loopPickSource === 'button' || state.loopPickSource === 'bar-badge')
+        );
+        if (forceLoopPick || event.shiftKey || isTouchOrButtonPickActive) {
             const clickedBarNum = state.barData[bestStep.measureIndex]?.barNumber ?? getBarNumberAtTicks(targetSeekTicks);
-            selectLoopBarPointOnScore(clickedBarNum);
+            const pickSource = forceLoopPick
+                ? 'touch'
+                : (event.shiftKey ? 'shift' : (state.loopPickSource || 'button'));
+            selectLoopPointOnScore({
+                barNumber: clickedBarNum,
+                startTicks: targetSeekTicks,
+                endTicks: targetNoteEndTicks,
+                svgEl: clickedNote?.svgEl || null,
+                source: pickSource,
+            });
             if (!state.isPlaying && hasVisibleNoteAtStep) {
                 highlightStepNotes(bestStep.stepIdx, clickedNote?.svgEl || null);
                 if (clickedNote) {
@@ -5683,16 +5805,17 @@
             return;
         }
 
-        // If A-B Loop is active and the user clicked a note outside the loop range, shift loop range to include it
-        if (state.loopEnabled && state.barData.length > 0) {
-            const { startTicks: loopStart, endTicks: loopEnd } = getLoopBoundsTicks();
-            if (targetSeekTicks < loopStart || targetSeekTicks >= loopEnd) {
-                const clickedBarNum = getBarNumberAtTicks(targetSeekTicks);
-                const span = Math.max(0, state.loopEndBar - state.loopStartBar);
-                state.loopStartBar = clickedBarNum;
-                state.loopEndBar = Math.min(state.barData.length, clickedBarNum + span);
-                syncLoopInputsUI();
-            }
+        // Plain click on the score (without Shift): cancel any pending Shift-pick and toggle active loop OFF
+        if (state.loopPickMode) {
+            cancelLoopPickMode();
+        }
+        if (state.loopEnabled) {
+            state.loopEnabled = false;
+            state.loopCustomStartTicks = null;
+            state.loopCustomEndTicks = null;
+            clearLoopNoteAnchorHighlights();
+            syncLoopInputsUI();
+            toast('Loop OFF');
         }
 
         if (state.isPlaying) {
@@ -6429,6 +6552,9 @@
                     }
                     toast(`Loop enabled: Bars ${state.loopStartBar}–${state.loopEndBar}`);
                 } else {
+                    state.loopCustomStartTicks = null;
+                    state.loopCustomEndTicks = null;
+                    clearLoopNoteAnchorHighlights();
                     cancelLoopPickMode();
                 }
                 syncLoopInputsUI();
@@ -6442,6 +6568,8 @@
                     cancelLoopPickMode();
                 } else {
                     state.loopPickMode = 'awaiting-start';
+                    state.loopPickSource = 'button';
+                    state.loopPickAnchor = null;
                     state.loopPickAnchorBar = null;
                     syncLoopPickBannerUI();
                 }
@@ -6463,6 +6591,9 @@
             e = Math.max(s, Math.min(maxBar, e));
             state.loopStartBar = s;
             state.loopEndBar = e;
+            state.loopCustomStartTicks = null;
+            state.loopCustomEndTicks = null;
+            clearLoopNoteAnchorHighlights();
             syncLoopInputsUI();
         };
 
