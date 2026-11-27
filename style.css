@@ -463,6 +463,76 @@ select {
     outline-offset: -1px;
 }
 
+.loop-pick-score-btn {
+    height: 22px;
+    padding: 0 7px;
+    margin-left: 2px;
+    border-radius: 4px;
+    border: 1px solid rgba(13, 148, 136, 0.45);
+    background: var(--surface);
+    color: var(--loop-color);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.loop-pick-score-btn:hover,
+.loop-pick-score-btn.active {
+    background: var(--loop-color);
+    border-color: var(--loop-color);
+    color: #FFFFFF;
+}
+
+/* Floating A-B Loop Selection Banner in Score Viewport */
+.loop-pick-banner {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px 6px 14px;
+    border-radius: var(--radius-pill);
+    background: rgba(15, 118, 110, 0.96);
+    color: #FFFFFF;
+    font-size: 12.5px;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35);
+    white-space: nowrap;
+    max-width: calc(100% - 24px);
+}
+
+.loop-pick-banner[hidden] {
+    display: none !important;
+}
+
+.loop-pick-banner-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.loop-pick-cancel-btn {
+    height: 22px;
+    padding: 0 8px;
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.16);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.loop-pick-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
 /* Segmented Controls (View Mode & Pitch) */
 .segmented-control {
     display: inline-flex;
@@ -746,9 +816,35 @@ body.viewport-fullscreen .viewport-floating-hud {
     font-style: italic;
     line-height: 1;
     color: var(--text-secondary);
-    pointer-events: none;
+    pointer-events: auto;
+    cursor: pointer;
     user-select: none;
     white-space: nowrap;
+    padding: 1px 4px;
+    border-radius: 4px;
+    transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.staff-bar-number:hover {
+    background: var(--loop-soft);
+    color: var(--loop-color);
+}
+
+.staff-bar-number.loop-in-range {
+    background: rgba(13, 148, 136, 0.14);
+    color: #0F766E;
+    font-style: normal;
+    font-weight: 700;
+}
+
+.staff-bar-number.loop-anchor-a,
+.staff-bar-number.loop-anchor-b,
+.staff-bar-number.loop-pending-a {
+    background: #0D9488;
+    color: #FFFFFF;
+    font-style: normal;
+    font-weight: 700;
+    box-shadow: 0 1px 4px rgba(13, 148, 136, 0.35);
 }
 
 /* Part Name + "This is my part ->" interactive arrow buttons in front of each staff at the start of the score */

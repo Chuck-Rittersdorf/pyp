@@ -112,6 +112,10 @@
         loopRangeInputs: document.getElementById('loopRangeInputs'),
         loopStartInput: document.getElementById('loopStartInput'),
         loopEndInput: document.getElementById('loopEndInput'),
+        loopPickScoreBtn: document.getElementById('loopPickScoreBtn'),
+        loopPickBanner: document.getElementById('loopPickBanner'),
+        loopPickBannerText: document.getElementById('loopPickBannerText'),
+        loopPickCancelBtn: document.getElementById('loopPickCancelBtn'),
         loopTrackHighlight: document.getElementById('loopTrackHighlight'),
         metronomeToggleButton: document.getElementById('metronomeToggleButton'),
 
@@ -212,6 +216,8 @@
         loopEnabled: false,
         loopStartBar: 1,
         loopEndBar: 4,
+        loopPickMode: null,      // null | 'awaiting-start' | 'awaiting-end'
+        loopPickAnchorBar: null, // 1-based bar number for point A while awaiting point B
         metronomeEnabled: false,
 
         // Audio Engine & Multi-Instrument Sample Cache
@@ -3220,6 +3226,116 @@
             dom.loopRangeInputs.hidden = !state.loopEnabled;
         }
         updateLoopTrackHighlight();
+        updateStaffBarNumberLoopMarkers();
+    }
+
+    function syncLoopPickBannerUI() {
+        const activeMode = state.loopPickMode;
+        if (dom.loopPickScoreBtn) {
+            dom.loopPickScoreBtn.classList.toggle('active', Boolean(activeMode));
+        }
+        if (dom.loopPickBanner && dom.loopPickBannerText) {
+            if (!activeMode || !state.scoreLoaded) {
+                dom.loopPickBanner.hidden = true;
+            } else if (activeMode === 'awaiting-start') {
+                dom.loopPickBannerText.textContent = 'Loop A–B: Click or tap start note/bar (A) on the score…';
+                dom.loopPickBanner.hidden = false;
+            } else if (activeMode === 'awaiting-end') {
+                dom.loopPickBannerText.textContent = `Loop Start (A): Bar ${state.loopPickAnchorBar} — Click or tap end note/bar (B)…`;
+                dom.loopPickBanner.hidden = false;
+            }
+        }
+        updateStaffBarNumberLoopMarkers();
+    }
+
+    function cancelLoopPickMode() {
+        if (!state.loopPickMode && state.loopPickAnchorBar === null) return;
+        state.loopPickMode = null;
+        state.loopPickAnchorBar = null;
+        syncLoopPickBannerUI();
+    }
+
+    function updateStaffBarNumberLoopMarkers() {
+        const box = dom.scoreDisplayArea;
+        if (!box) return;
+        const badges = box.querySelectorAll('.staff-bar-number');
+        if (!badges.length) return;
+
+        const isPendingA = state.loopPickMode === 'awaiting-end' && typeof state.loopPickAnchorBar === 'number';
+        const pendingBar = state.loopPickAnchorBar;
+        const loopActive = Boolean(state.loopEnabled);
+        const sBar = state.loopStartBar;
+        const eBar = state.loopEndBar;
+
+        badges.forEach((badge) => {
+            const barNum = parseInt(badge.dataset.barNumber, 10);
+            if (!barNum) return;
+
+            badge.classList.remove('loop-pending-a', 'loop-anchor-a', 'loop-anchor-b', 'loop-in-range');
+
+            if (isPendingA && barNum === pendingBar) {
+                badge.classList.add('loop-pending-a');
+                badge.textContent = `A · ${barNum}`;
+                return;
+            }
+
+            if (loopActive && barNum >= sBar && barNum <= eBar) {
+                if (sBar === eBar && barNum === sBar) {
+                    badge.classList.add('loop-anchor-a');
+                    badge.textContent = `A–B · ${barNum}`;
+                } else if (barNum === sBar) {
+                    badge.classList.add('loop-anchor-a');
+                    badge.textContent = `A · ${barNum}`;
+                } else if (barNum === eBar) {
+                    badge.classList.add('loop-anchor-b');
+                    badge.textContent = `B · ${barNum}`;
+                } else {
+                    badge.classList.add('loop-in-range');
+                    badge.textContent = String(barNum);
+                }
+            } else {
+                badge.textContent = String(barNum);
+            }
+        });
+    }
+
+    /**
+     * Handles selecting point A or point B of an A–B Bar Loop directly on the score
+     * (via Shift+Click, Mobile Long-Press, Pick A–B mode, or tapping Bar Number badges).
+     */
+    function selectLoopBarPointOnScore(clickedBarNum) {
+        if (!state.scoreLoaded || !state.barData.length) return;
+        const maxBar = state.barData[state.barData.length - 1]?.barNumber || state.barData.length;
+        const clampedBar = Math.max(1, Math.min(maxBar, clickedBarNum));
+
+        if (state.loopPickMode !== 'awaiting-end' || typeof state.loopPickAnchorBar !== 'number') {
+            // Set Point A (Start Anchor)
+            state.loopPickAnchorBar = clampedBar;
+            state.loopPickMode = 'awaiting-end';
+            syncLoopPickBannerUI();
+
+            const barObj = state.barData.find((b) => b.barNumber === clampedBar) || state.barData[clampedBar - 1];
+            if (barObj) {
+                seekToTicks(barObj.startTicks, { snapScroll: false, keepPlaying: state.isPlaying, keepViewport: !state.isPlaying });
+            }
+            toast(`Loop Start (A): Bar ${clampedBar} — click or tap end note/bar (B)`, 'info', 2800);
+        } else {
+            // Set Point B (Complete A-B Loop)
+            const startBar = Math.min(state.loopPickAnchorBar, clampedBar);
+            const endBar = Math.max(state.loopPickAnchorBar, clampedBar);
+            state.loopStartBar = startBar;
+            state.loopEndBar = endBar;
+            state.loopEnabled = true;
+            state.loopPickMode = null;
+            state.loopPickAnchorBar = null;
+
+            syncLoopInputsUI();
+            syncLoopPickBannerUI();
+
+            const { startTicks } = getLoopBoundsTicks();
+            seekToTicks(startTicks, { snapScroll: false, keepPlaying: state.isPlaying, keepViewport: !state.isPlaying, glideCamera: state.isPlaying });
+            toast(`Loop enabled: Bars ${startBar}–${endBar}`, 'success', 2800);
+        }
     }
 
     function updateLoopTrackHighlight() {
@@ -3486,15 +3602,22 @@
 
                 const badge = document.createElement('span');
                 badge.className = 'staff-bar-number';
+                badge.dataset.barNumber = String(rawBarNum);
                 badge.textContent = String(rawBarNum);
+                badge.title = `Bar ${rawBarNum} — Click/tap two bar numbers (or Shift+Click / Long-Press notes) to set A–B Loop`;
                 badge.style.left = `${leftPx.toFixed(1)}px`;
                 badge.style.top = `${topPx.toFixed(1)}px`;
                 badge.style.fontSize = `${fontSizePx}px`;
+                badge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectLoopBarPointOnScore(rawBarNum);
+                });
                 frag.appendChild(badge);
             }
         }
 
         layer.appendChild(frag);
+        updateStaffBarNumberLoopMarkers();
     }
 
     /**
@@ -4268,6 +4391,7 @@
         state.highlightedStaffBands = [];
         state.centeredStaffBands = [];
         state.loopEnabled = false;
+        cancelLoopPickMode();
         setScoreControlsEnabled(false);
 
         dom.scoreDisplayArea.classList.remove('score-loaded');
@@ -5405,8 +5529,9 @@
     // CLICK-ON-SCORE TO SEEK (MUSESCORE STYLE)
     // ===========================================
 
-    function handleScoreClick(event) {
+    function handleScoreClick(event, options = {}) {
         if (!state.scoreLoaded || !state.cursorSteps.length) return;
+        const { forceLoopPick = false } = options;
 
         // Ignore clicks on scrollbars using viewport-relative coordinates (NOT event.offsetX!)
         const box = dom.scoreDisplayArea;
@@ -5542,6 +5667,21 @@
         const targetSeekTicks = (!hasVisibleNoteAtStep && state.barData[bestStep.measureIndex])
             ? state.barData[bestStep.measureIndex].startTicks
             : bestStep.ticks;
+
+        // Quick A-B Loop Selection:
+        // - Desktop: Shift + Click on two notes/bars (or Shift+Click first note, then click second note)
+        // - Mobile / Touch: Long-Press (~420ms) on first note/bar, then tap second note/bar (or use "Pick A-B" button)
+        if (forceLoopPick || event.shiftKey || state.loopPickMode) {
+            const clickedBarNum = state.barData[bestStep.measureIndex]?.barNumber ?? getBarNumberAtTicks(targetSeekTicks);
+            selectLoopBarPointOnScore(clickedBarNum);
+            if (!state.isPlaying && hasVisibleNoteAtStep) {
+                highlightStepNotes(bestStep.stepIdx, clickedNote?.svgEl || null);
+                if (clickedNote) {
+                    auditionClickedNote(clickedNote);
+                }
+            }
+            return;
+        }
 
         // If A-B Loop is active and the user clicked a note outside the loop range, shift loop range to include it
         if (state.loopEnabled && state.barData.length > 0) {
@@ -6158,6 +6298,7 @@
         state.loopEnabled = false;
         state.loopStartBar = 1;
         state.loopEndBar = 4;
+        cancelLoopPickMode();
         state.baseScoreBpm = CONFIG.DEFAULT_BPM;
         state.activeBarBaseBpm = CONFIG.DEFAULT_BPM;
         state.tempoPercent = CONFIG.DEFAULT_TEMPO_PERCENT;
@@ -6287,8 +6428,30 @@
                         state.loopEndBar = Math.min(state.barData.length, currBarNum + 3);
                     }
                     toast(`Loop enabled: Bars ${state.loopStartBar}–${state.loopEndBar}`);
+                } else {
+                    cancelLoopPickMode();
                 }
                 syncLoopInputsUI();
+            });
+        }
+
+        if (dom.loopPickScoreBtn) {
+            dom.loopPickScoreBtn.addEventListener('click', () => {
+                if (!state.scoreLoaded || !state.barData.length) return;
+                if (state.loopPickMode) {
+                    cancelLoopPickMode();
+                } else {
+                    state.loopPickMode = 'awaiting-start';
+                    state.loopPickAnchorBar = null;
+                    syncLoopPickBannerUI();
+                }
+            });
+        }
+
+        if (dom.loopPickCancelBtn) {
+            dom.loopPickCancelBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                cancelLoopPickMode();
             });
         }
 
@@ -6755,7 +6918,19 @@
                 }, 140);
             }, { passive: false });
 
+            let longPressTimer = null;
+            let longPressTriggered = false;
+
+            const clearLongPressTimer = () => {
+                if (longPressTimer) {
+                    window.clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            };
+
             dom.scoreDisplayArea.addEventListener('pointerdown', (e) => {
+                clearLongPressTimer();
+                longPressTriggered = false;
                 if (pinchActive || (performance.now() - lastPinchEndTime) < 350) {
                     pointerDownPos = null;
                     return;
@@ -6765,8 +6940,44 @@
                     return;
                 }
                 pointerDownPos = { x: e.clientX, y: e.clientY };
+
+                // Mobile / touch Long-Press (~420ms) on any note/bar sets Loop Start (A) and arms next tap for End (B)
+                if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const targetEl = e.target;
+                    longPressTimer = window.setTimeout(() => {
+                        longPressTimer = null;
+                        if (pinchActive || !pointerDownPos) return;
+                        longPressTriggered = true;
+                        pointerDownPos = null;
+                        try {
+                            if (typeof navigator.vibrate === 'function') {
+                                navigator.vibrate(18);
+                            }
+                        } catch (_) { /* ignore */ }
+                        handleScoreClick({ clientX: startX, clientY: startY, target: targetEl, shiftKey: false }, { forceLoopPick: true });
+                    }, 420);
+                }
             });
+
+            dom.scoreDisplayArea.addEventListener('pointermove', (e) => {
+                if (!longPressTimer || !pointerDownPos) return;
+                if (Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 12) {
+                    clearLongPressTimer();
+                }
+            });
+
+            dom.scoreDisplayArea.addEventListener('pointerup', clearLongPressTimer);
+            dom.scoreDisplayArea.addEventListener('pointercancel', clearLongPressTimer);
+
             dom.scoreDisplayArea.addEventListener('click', (e) => {
+                clearLongPressTimer();
+                if (longPressTriggered) {
+                    longPressTriggered = false;
+                    pointerDownPos = null;
+                    return;
+                }
                 if (pinchActive || (performance.now() - lastPinchEndTime) < 350) {
                     pointerDownPos = null;
                     return;
@@ -7021,7 +7232,10 @@
                     toggleAppFullscreen();
                     break;
                 case 'Escape':
-                    if (state.viewportFullscreen) {
+                    if (state.loopPickMode) {
+                        e.preventDefault();
+                        cancelLoopPickMode();
+                    } else if (state.viewportFullscreen) {
                         e.preventDefault();
                         toggleViewportFullscreen(false);
                     }

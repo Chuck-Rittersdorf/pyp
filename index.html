@@ -96,6 +96,7 @@
                     <label class="loop-input-wrap" title="Loop End Bar">
                         <input type="number" id="loopEndInput" min="1" value="4" aria-label="Loop end bar">
                     </label>
+                    <button type="button" class="loop-pick-score-btn" id="loopPickScoreBtn" title="Tap two notes or bars on the score to set A–B loop (or Shift+Click / Long-Press on score)">Pick A–B</button>
                 </div>
             </div>
 
@@ -233,6 +234,12 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Floating A-B Loop Selection Banner (shown during Shift+Click, Long-Press, or Pick A-B mode) -->
+        <div class="loop-pick-banner" id="loopPickBanner" hidden>
+            <span class="loop-pick-banner-text" id="loopPickBannerText">Tap start note/bar (A) on the score…</span>
+            <button type="button" class="loop-pick-cancel-btn" id="loopPickCancelBtn" aria-label="Cancel loop selection">Cancel</button>
         </div>
 
         <!-- Floating Viewport Quick-Controls (Score Full Screen toggle + Play/Pause while in Score Full Screen) -->
