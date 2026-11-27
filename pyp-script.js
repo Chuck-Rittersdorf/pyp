@@ -16,7 +16,8 @@
         DEFAULT_TEMPO_PERCENT: 100,
         DEFAULT_PART_VOLUME: 80,
         HIGHLIGHT_MAIN_VOLUME: 100,
-        HIGHLIGHT_OTHER_VOLUME: 70,
+        HIGHLIGHT_OTHER_VOLUME: 60,
+        HIGHLIGHT_KEYBOARD_VOLUME: 50,
         MIN_TEMPO_PERCENT: 25,
         MAX_TEMPO_PERCENT: 200,
         BASE_OSMD_ZOOM: 0.70, // 100% UI zoom corresponds to what was previously 70% OSMD zoom
@@ -1519,6 +1520,7 @@
                     if (!nextParts[partId]) {
                         const prev = prevParts[partId];
                         const detected = detectPartInstrument(pInfo, rawPartInfos);
+                        const isKeyboardPart = isHarpsichordOrPianoPart(pInfo, rawPartInfos);
                         const defaultPatch = (state.soundPreset !== 'auto' && INSTRUMENT_CATALOG[state.soundPreset])
                             ? state.soundPreset
                             : detected.patchId;
@@ -1533,6 +1535,7 @@
                             centered: prev ? Boolean(prev.centered) : false,
                             hidden: prev ? Boolean(prev.hidden) : Boolean(pInfo.autoHiddenOnLoad),
                             defaultHidden: prev ? Boolean(prev.defaultHidden) : Boolean(pInfo.autoHiddenOnLoad),
+                            isKeyboard: prev ? Boolean(prev.isKeyboard) : Boolean(isKeyboardPart),
                             patchId: prev ? prev.patchId : defaultPatch,
                             detectedPatchId: prev ? prev.detectedPatchId : detected.patchId,
                             isVocal: prev ? prev.isVocal : detected.isVocal,
@@ -3676,7 +3679,8 @@
 
     /**
      * Toggles Highlight ('H') for a given partId:
-     * - Marks the part's staff in yellow, sets its volume to 100% and other parts to 70%.
+     * - Marks the part's staff in yellow, sets its volume to 100%, other parts to 60%,
+     *   and piano/harpsichord/continuo accompaniment parts to 50%.
      * - Shared by the Part Mixer 'H' button and the "This is my part" arrow button in front of each staff.
      */
     function togglePartHighlight(partId) {
@@ -3693,7 +3697,12 @@
                 } else {
                     p.highlighted = false;
                     p.soloed = false;
-                    p.volume = CONFIG.HIGHLIGHT_OTHER_VOLUME;
+                    const isKb = Boolean(
+                        p.isKeyboard ||
+                        p.defaultHidden ||
+                        /\b(harpsichord|cembalo|clavicembalo|clavecin|klavecimbel|clavichord|virginal|spinet|continuo|basso\s*continuo|generalbass|piano|pianoforte|klavier|fortepiano)\b/i.test(p.name || '')
+                    );
+                    p.volume = isKb ? CONFIG.HIGHLIGHT_KEYBOARD_VOLUME : CONFIG.HIGHLIGHT_OTHER_VOLUME;
                 }
             } else {
                 p.highlighted = false;
@@ -3707,7 +3716,7 @@
         refreshActiveNoteHighlightColors();
         applyAllPartGains(false);
         if (willHighlight) {
-            toast(`Highlighted ${part.name} (${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%)`);
+            toast(`Highlighted ${part.name} (${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%, keyboard ${CONFIG.HIGHLIGHT_KEYBOARD_VOLUME}%)`);
         }
     }
 
