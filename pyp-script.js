@@ -6981,25 +6981,7 @@
     function bindWelcomeScreenActions() {
         const welcomeOpenBtn = document.getElementById('welcomeOpenBtn');
         const welcomeStartTourBtn = document.getElementById('welcomeStartTourBtn');
-        const tourInviteBanner = document.getElementById('tourInviteBanner');
-        const tourInviteStartBtn = document.getElementById('tourInviteStartBtn');
-        const tourInviteDismissBtn = document.getElementById('tourInviteDismissBtn');
 
-        if (tourInviteBanner) {
-            tourInviteBanner.hidden = isTourInviteDismissed();
-        }
-        if (tourInviteStartBtn) {
-            tourInviteStartBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                startGuidedTour();
-            });
-        }
-        if (tourInviteDismissBtn) {
-            tourInviteDismissBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                setTourInviteDismissed();
-            });
-        }
         if (welcomeStartTourBtn) {
             welcomeStartTourBtn.addEventListener('click', (e) => {
                 e.stopPropagation();

@@ -1972,81 +1972,8 @@ kbd {
 }
 
 /* ===========================================
-   FIRST-LOAD TOUR INVITE & INTERACTIVE GUIDED TOUR
+   INTERACTIVE GUIDED TOUR
    =========================================== */
-
-.tour-invite-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 14px;
-    margin-bottom: 18px;
-    border-radius: var(--radius-md);
-    background: var(--accent-soft);
-    border: 1px solid rgba(2, 136, 209, 0.32);
-    text-align: left;
-}
-
-.tour-invite-banner[hidden] {
-    display: none !important;
-}
-
-.tour-invite-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 12.5px;
-    color: var(--text-primary);
-}
-
-.tour-invite-text strong {
-    font-size: 13px;
-    color: var(--accent);
-}
-
-.tour-invite-text span {
-    color: var(--text-secondary);
-}
-
-.tour-invite-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-}
-
-.tour-invite-btn {
-    height: 30px;
-    padding: 0 12px;
-    border-radius: var(--radius-sm);
-    font-family: var(--font-sans);
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
-}
-
-.tour-invite-start {
-    background: var(--accent);
-    color: #FFFFFF;
-    border: 1px solid var(--accent);
-}
-
-.tour-invite-start:hover {
-    background: var(--accent-hover);
-}
-
-.tour-invite-dismiss {
-    background: var(--surface);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-strong);
-}
-
-.tour-invite-dismiss:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
-}
 
 .tour-overlay {
     position: fixed;
