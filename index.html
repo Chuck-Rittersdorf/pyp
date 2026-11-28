@@ -322,8 +322,9 @@
                 <div class="control-pill tempo-pill">
                     <span class="pill-label" title="Playback Tempo">Tempo</span>
                     <button class="nudge-btn" id="tempoDownBtn" title="Decrease Tempo by 5%" aria-label="Decrease tempo">−</button>
-                    <input type="range" min="25" max="200" step="1" value="100" class="compact-slider tempo-slider" id="tempoSlider" title="Playback Tempo (%)" aria-label="Playback Tempo">
+                    <input type="range" min="25" max="200" step="1" value="100" class="compact-slider tempo-slider" id="tempoSlider" title="Playback Tempo (%) — Double-click to reset to 100%" aria-label="Playback Tempo">
                     <button class="nudge-btn" id="tempoUpBtn" title="Increase Tempo by 5%" aria-label="Increase tempo">+</button>
+                    <button class="nudge-btn tempo-random-btn" id="tempoRandomBtn" title="Randomize tempo within ±10% of base tempo (90%–110%)" aria-label="Randomize tempo within 10% of base tempo">R</button>
                     <button class="tempo-readout-btn" id="tempoResetBtn" title="Click to reset tempo to 100%">
                         <output for="tempoSlider" id="tempoValueOutput">100%</output>
                         <span id="tempoBpmOutput" class="bpm-sub">(120 BPM)</span>

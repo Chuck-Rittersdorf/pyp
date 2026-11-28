@@ -149,6 +149,7 @@
         tempoDownBtn: document.getElementById('tempoDownBtn'),
         tempoSlider: document.getElementById('tempoSlider'),
         tempoUpBtn: document.getElementById('tempoUpBtn'),
+        tempoRandomBtn: document.getElementById('tempoRandomBtn'),
         tempoResetBtn: document.getElementById('tempoResetBtn'),
         tempoValueOutput: document.getElementById('tempoValueOutput'),
         tempoBpmOutput: document.getElementById('tempoBpmOutput'),
@@ -3139,6 +3140,31 @@
         if (dom.tempoBpmOutput) dom.tempoBpmOutput.textContent = `(${effectiveBpm} BPM)`;
     }
 
+    function applyTempoPercent(pct) {
+        state.tempoPercent = Math.max(CONFIG.MIN_TEMPO_PERCENT, Math.min(CONFIG.MAX_TEMPO_PERCENT, Math.round(pct)));
+        if (state.audioInitialized) {
+            Tone.Transport.bpm.value = getEffectiveBpm();
+        }
+        updateTempoReadoutUI();
+    }
+
+    function randomizeTempoWithin10Percent({ showToast = true } = {}) {
+        const minPct = 90;
+        const maxPct = 110;
+        const candidates = [];
+        for (let p = minPct; p <= maxPct; p++) {
+            if (p !== 100 && p !== state.tempoPercent) {
+                candidates.push(p);
+            }
+        }
+        const randomPct = candidates[Math.floor(Math.random() * candidates.length)] ?? 95;
+        applyTempoPercent(randomPct);
+        if (showToast) {
+            toast(`Random tempo: ${randomPct}% (${Math.round(getEffectiveBpm())} BPM)`);
+        }
+        return randomPct;
+    }
+
     function updateTimelineReadout(ticks) {
         if (dom.navigationSlider) {
             dom.navigationSlider.value = String(Math.round(ticks));
@@ -4550,6 +4576,7 @@
 
             // Automatically expand part mixer before extracting/centering so viewport height is final
             extractScoreData(false);
+            randomizeTempoWithin10Percent({ showToast: false });
             setScoreControlsEnabled(true);
             syncLoopInputsUI();
 
@@ -4567,7 +4594,7 @@
             const summaryInstruments = [...new Set(
                 Object.values(state.parts).map((p) => INSTRUMENT_CATALOG[p.patchId]?.label || 'Piano')
             )].slice(0, 3).join(', ');
-            toast(`Loaded "${state.scoreTitle}" (${numParts} parts, ${numBars} bars — ${summaryInstruments})`, 'success', 3400);
+            toast(`Loaded "${state.scoreTitle}" (${numParts} parts, ${numBars} bars — ${summaryInstruments}, Tempo ${state.tempoPercent}%)`, 'success', 3400);
         } catch (err) {
             console.error('[PYP] Error loading score:', err);
             state.osmd = null;
@@ -7152,21 +7179,22 @@
         }
 
         // Live Tempo Control (NO pause, NO restart — instant seamless speed scaling!)
-        const applyTempoPercent = (pct) => {
-            state.tempoPercent = Math.max(CONFIG.MIN_TEMPO_PERCENT, Math.min(CONFIG.MAX_TEMPO_PERCENT, Math.round(pct)));
-            if (state.audioInitialized) {
-                Tone.Transport.bpm.value = getEffectiveBpm();
-            }
-            updateTempoReadoutUI();
-        };
-
         if (dom.tempoSlider) {
             dom.tempoSlider.addEventListener('input', () => {
                 applyTempoPercent(parseInt(dom.tempoSlider.value, 10));
             });
+            dom.tempoSlider.addEventListener('dblclick', () => {
+                applyTempoPercent(CONFIG.DEFAULT_TEMPO_PERCENT);
+                toast('Tempo reset to 100%');
+            });
         }
         if (dom.tempoDownBtn) dom.tempoDownBtn.addEventListener('click', () => applyTempoPercent(state.tempoPercent - 5));
         if (dom.tempoUpBtn) dom.tempoUpBtn.addEventListener('click', () => applyTempoPercent(state.tempoPercent + 5));
+        if (dom.tempoRandomBtn) {
+            dom.tempoRandomBtn.addEventListener('click', () => {
+                randomizeTempoWithin10Percent({ showToast: true });
+            });
+        }
         if (dom.tempoResetBtn) dom.tempoResetBtn.addEventListener('click', () => applyTempoPercent(100));
 
         // Global Instrument Preset / Override Selector
