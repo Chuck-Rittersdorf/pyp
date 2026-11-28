@@ -1672,15 +1672,17 @@ kbd {
 }
 
 .part-instrument-select {
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
     height: 24px;
-    padding: 0 20px 0 7px;
+    padding: 0 18px 0 6px;
     border: 1px solid var(--border);
     border-radius: 5px;
     background-color: var(--surface-subtle);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2352657A' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 6px center;
+    background-position: right 5px center;
     -webkit-appearance: none;
     appearance: none;
     color: var(--text-primary);
@@ -1688,6 +1690,43 @@ kbd {
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.part-mp3-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 24px;
+    padding: 0 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.part-mp3-btn:hover:not(:disabled) {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.part-mp3-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.part-mp3-btn.is-exporting {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .part-instrument-select:hover {
@@ -2505,7 +2544,19 @@ kbd {
     .part-instrument-select {
         height: 19px;
         font-size: 10px;
-        padding: 0 15px 0 5px;
+        padding: 0 14px 0 5px;
+    }
+
+    .part-mp3-btn {
+        height: 19px;
+        padding: 0 5px;
+        font-size: 9.5px;
+        gap: 2px;
+    }
+
+    .part-mp3-btn svg {
+        width: 10px;
+        height: 10px;
     }
 
     .part-volume-row {

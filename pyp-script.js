@@ -4069,6 +4069,486 @@
         }
     }
 
+    // ===========================================
+    // OFFLINE MP3 EXPORT FOR A HIGHLIGHTED PART (100% TEMPO)
+    // ===========================================
+
+    function noteNameToMidiNumber(noteName) {
+        const m = /^([A-G])(#|b)?(\d+)$/i.exec(String(noteName || '').trim());
+        if (!m) return 60;
+        const stepMap = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+        const base = stepMap[m[1].toUpperCase()] ?? 0;
+        const alt = m[2] === '#' ? 1 : (m[2] === 'b' ? -1 : 0);
+        const oct = parseInt(m[3], 10);
+        return (oct + 1) * 12 + base + alt;
+    }
+
+    function buildTickToSecondsConverterAt100PercentTempo() {
+        const tpWhole = state.ticksPerWhole || 768;
+        const bars = state.barData && state.barData.length > 0
+            ? state.barData
+            : [{ startTicks: 0, endTicks: Math.max(tpWhole, state.totalMusicalTicks), bpm: state.baseScoreBpm || CONFIG.DEFAULT_BPM }];
+
+        const segments = [];
+        let accSec = 0;
+
+        for (let i = 0; i < bars.length; i++) {
+            const b = bars[i];
+            const bpm = Math.max(10, b.bpm || state.baseScoreBpm || CONFIG.DEFAULT_BPM);
+            const secPerTick = ((60 / bpm) * 4) / tpWhole;
+            const startTicks = b.startTicks;
+            const endTicks = Math.max(startTicks + 1, b.endTicks);
+            segments.push({
+                startTicks,
+                endTicks,
+                startSec: accSec,
+                secPerTick,
+            });
+            accSec += (endTicks - startTicks) * secPerTick;
+        }
+
+        const ticksToSec = (ticks) => {
+            if (ticks <= 0 || !segments.length) return 0;
+            let lo = 0;
+            let hi = segments.length - 1;
+            let seg = segments[hi];
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                const cand = segments[mid];
+                if (ticks < cand.startTicks) {
+                    hi = mid - 1;
+                } else if (ticks >= cand.endTicks && mid < segments.length - 1) {
+                    lo = mid + 1;
+                } else {
+                    seg = cand;
+                    break;
+                }
+            }
+            return seg.startSec + Math.max(0, ticks - seg.startTicks) * seg.secPerTick;
+        };
+
+        return { ticksToSec };
+    }
+
+    /**
+     * Builds the active timeline slices for a target part's MP3 export:
+     * Only treats bars as rest bars when ALL singers / non-keyboard parts are resting
+     * (i.e. bars that are a multirest in the score because only the hidden harpsichord/piano part plays).
+     * Never skips bars where other singers have notes.
+     * - Opening multibar rest (>= 2 rest bars at the beginning): skips straight to the -1 bar (the 1 count-in bar before entry).
+     * - In-between multibar rest (>= 2 multi-rest bars + 1 count-in bar = >= 3 rest bars): skips straight to the -1 bar.
+     * - Trailing multibar rest at the end (>= 2 rest bars after the singers' final active bar): skips straight to the end.
+     */
+    function buildMp3TimelineSlicesForPart(targetPartId, rawTicksToSec) {
+        const tpWhole = state.ticksPerWhole || 768;
+        const bars = (state.barData && state.barData.length > 0)
+            ? state.barData
+            : [{ barNumber: 1, measureIndex: 0, startTicks: 0, endTicks: Math.max(tpWhole, state.totalMusicalTicks), bpm: state.baseScoreBpm || CONFIG.DEFAULT_BPM }];
+        const numBars = bars.length;
+
+        // Identify which parts are hidden harpsichord / piano accompaniment parts vs singer / visible score parts
+        const isHiddenKeyboardPart = (partId) => {
+            if (partId === targetPartId) return false; // If exporting the keyboard part itself, don't treat its own notes as hidden
+            const p = state.parts[partId];
+            if (!p) return false;
+            return Boolean(
+                p.defaultHidden ||
+                p.isKeyboard ||
+                /\b(harpsichord|cembalo|clavicembalo|clavecin|klavecimbel|clavichord|virginal|spinet|continuo|basso\s*continuo|generalbass|piano|pianoforte|klavier|fortepiano)\b/i.test(p.name || '')
+            );
+        };
+
+        // 1. Determine which bars contain sounding notes in ANY singer / non-keyboard part
+        const hasPartNote = new Array(numBars).fill(false);
+        let anyTargetNotes = false;
+
+        for (let i = 0; i < state.allScoreNotes.length; i++) {
+            const n = state.allScoreNotes[i];
+            if (isHiddenKeyboardPart(n.partId)) continue;
+            const nStart = n.ticks;
+            const nEnd = n.ticks + Math.max(12, Math.round((n.durationWhole || 0.25) * tpWhole));
+
+            for (let m = 0; m < numBars; m++) {
+                const b = bars[m];
+                if (b.endTicks <= nStart) continue;
+                if (b.startTicks >= nEnd) break;
+                hasPartNote[m] = true;
+                anyTargetNotes = true;
+            }
+        }
+
+        // If target part has no notes at all, keep full score
+        const keepBar = new Array(numBars).fill(true);
+        let skippedBarsCount = 0;
+
+        if (anyTargetNotes) {
+            let m = 0;
+            while (m < numBars) {
+                if (hasPartNote[m]) {
+                    m++;
+                    continue;
+                }
+                let rStart = m;
+                let rEnd = m;
+                while (rEnd + 1 < numBars && !hasPartNote[rEnd + 1]) {
+                    rEnd++;
+                }
+                const runLen = rEnd - rStart + 1;
+
+                if (rStart === 0 && rEnd < numBars - 1) {
+                    // Multibar rest at the beginning: skip straight to the -1 bar (rEnd)
+                    if (runLen >= 2) {
+                        for (let k = rStart; k < rEnd; k++) {
+                            keepBar[k] = false;
+                            skippedBarsCount++;
+                        }
+                    }
+                } else if (rEnd === numBars - 1 && rStart > 0) {
+                    // Multibar rest at the end: skip straight to the end
+                    if (runLen >= 2) {
+                        for (let k = rStart; k <= rEnd; k++) {
+                            keepBar[k] = false;
+                            skippedBarsCount++;
+                        }
+                    }
+                } else if (rStart > 0 && rEnd < numBars - 1) {
+                    // Multibar rest in between: >= 2 multi-rest bars + 1 (-1 bar) = runLen >= 3 -> skip straight to -1 bar (rEnd)
+                    if (runLen >= 3) {
+                        for (let k = rStart; k < rEnd; k++) {
+                            keepBar[k] = false;
+                            skippedBarsCount++;
+                        }
+                    }
+                }
+
+                m = rEnd + 1;
+            }
+        }
+
+        // 2. Group contiguous kept bars into timeline slices with seamless output timestamps
+        const slices = [];
+        let outCursorSec = 0;
+        let idx = 0;
+
+        while (idx < numBars) {
+            if (!keepBar[idx]) {
+                idx++;
+                continue;
+            }
+            const sStartIdx = idx;
+            let sEndIdx = idx;
+            while (sEndIdx + 1 < numBars && keepBar[sEndIdx + 1]) {
+                sEndIdx++;
+            }
+
+            const startTicks = bars[sStartIdx].startTicks;
+            const endTicks = bars[sEndIdx].endTicks;
+            const rawStartSec = rawTicksToSec(startTicks);
+            const rawEndSec = rawTicksToSec(endTicks);
+            const durationSec = Math.max(0.01, rawEndSec - rawStartSec);
+
+            slices.push({
+                startMeasureIdx: sStartIdx,
+                endMeasureIdx: sEndIdx,
+                startBarNumber: bars[sStartIdx].barNumber,
+                endBarNumber: bars[sEndIdx].barNumber,
+                startTicks,
+                endTicks,
+                rawStartSec,
+                rawEndSec,
+                outputStartSec: outCursorSec,
+                outputEndSec: outCursorSec + durationSec,
+                durationSec,
+            });
+
+            outCursorSec += durationSec;
+            idx = sEndIdx + 1;
+        }
+
+        return {
+            slices,
+            totalRenderedSec: outCursorSec,
+            skippedBarsCount,
+        };
+    }
+
+    async function encodeAudioBufferToMp3Blob(audioBuffer) {
+        if (!window.lamejs || typeof window.lamejs.Mp3Encoder !== 'function') {
+            throw new Error('MP3 encoder library (lamejs) is not loaded.');
+        }
+
+        const numChannels = Math.min(2, audioBuffer.numberOfChannels || 2);
+        const sampleRate = audioBuffer.sampleRate || 44100;
+        const leftFloat = audioBuffer.getChannelData(0);
+        const rightFloat = numChannels > 1 ? audioBuffer.getChannelData(1) : leftFloat;
+        const len = leftFloat.length;
+
+        const leftInt16 = new Int16Array(len);
+        const rightInt16 = new Int16Array(len);
+        for (let i = 0; i < len; i++) {
+            const l = Math.max(-1, Math.min(1, leftFloat[i]));
+            const r = Math.max(-1, Math.min(1, rightFloat[i]));
+            leftInt16[i] = l < 0 ? Math.round(l * 32768) : Math.round(l * 32767);
+            rightInt16[i] = r < 0 ? Math.round(r * 32768) : Math.round(r * 32767);
+        }
+
+        const encoder = new window.lamejs.Mp3Encoder(numChannels, sampleRate, 192);
+        const mp3Chunks = [];
+        const blockSize = 1152;
+        const yieldEveryBlocks = 180;
+        let blockCount = 0;
+
+        for (let i = 0; i < len; i += blockSize) {
+            const lChunk = leftInt16.subarray(i, i + blockSize);
+            const rChunk = rightInt16.subarray(i, i + blockSize);
+            const mp3buf = numChannels > 1
+                ? encoder.encodeBuffer(lChunk, rChunk)
+                : encoder.encodeBuffer(lChunk);
+            if (mp3buf && mp3buf.length > 0) {
+                mp3Chunks.push(new Int8Array(mp3buf));
+            }
+            blockCount++;
+            if (blockCount % yieldEveryBlocks === 0) {
+                await new Promise((r) => window.setTimeout(r, 0));
+            }
+        }
+
+        const flushBuf = encoder.flush();
+        if (flushBuf && flushBuf.length > 0) {
+            mp3Chunks.push(new Int8Array(flushBuf));
+        }
+
+        return new Blob(mp3Chunks, { type: 'audio/mpeg' });
+    }
+
+    async function exportHighlightedPartMp3(targetPartId) {
+        if (!state.scoreLoaded || !state.allScoreNotes.length) {
+            toast('Load a score first to export an MP3', 'info');
+            return;
+        }
+        if (state.isExportingMp3) return;
+
+        const targetPart = state.parts[targetPartId];
+        if (!targetPart) return;
+
+        state.isExportingMp3 = true;
+        targetPart.isExportingMp3 = true;
+        renderPartMixerUI();
+        toast(`Rendering MP3 for ${targetPart.name} (100% tempo, highlighted mix)…`, 'info', 4000);
+
+        try {
+            // Ensure required instrument sample buffers (e.g., Grand Piano) are loaded
+            const uniquePatches = [...new Set(Object.values(state.parts).map((p) => p.patchId || 'piano'))];
+            await Promise.all(uniquePatches.map((pid) => loadInstrumentBuffersOnce(pid)));
+
+            const { ticksToSec: rawTicksToSec } = buildTickToSecondsConverterAt100PercentTempo();
+            const { slices, totalRenderedSec, skippedBarsCount } = buildMp3TimelineSlicesForPart(targetPartId, rawTicksToSec);
+            const totalScoreSec = Math.max(1.0, totalRenderedSec) + 1.4;
+            const sampleRate = 44100;
+            const totalFrames = Math.max(sampleRate, Math.ceil(totalScoreSec * sampleRate));
+
+            const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            const offlineCtx = new OfflineCtx(2, totalFrames, sampleRate);
+
+            // Master bus compressor & limiter protection matching live engine
+            const masterCompressor = offlineCtx.createDynamicsCompressor();
+            masterCompressor.threshold.setValueAtTime(-10, 0);
+            masterCompressor.knee.setValueAtTime(12, 0);
+            masterCompressor.ratio.setValueAtTime(4, 0);
+            masterCompressor.attack.setValueAtTime(0.005, 0);
+            masterCompressor.release.setValueAtTime(0.22, 0);
+            masterCompressor.connect(offlineCtx.destination);
+
+            const masterBus = offlineCtx.createGain();
+            masterBus.gain.setValueAtTime(0.90, 0);
+            masterBus.connect(masterCompressor);
+
+            // Precompute custom PeriodicWave for 'wave' (Smooth Wave) instrument
+            const waveReal = new Float32Array([0, 0, 0, 0, 0]);
+            const waveImag = new Float32Array([0, 1, 0.32, 0.10, 0.03]);
+            const smoothPeriodicWave = offlineCtx.createPeriodicWave(waveReal, waveImag);
+
+            // Extract decoded AudioBuffers for Salamander Grand Piano
+            const pianoSampleList = [];
+            const pianoBuffers = state.instrumentBuffers.piano;
+            if (pianoBuffers && !state.instrumentFailed.piano) {
+                for (const noteName of Object.keys(SALAMANDER_PIANO_URLS)) {
+                    if (pianoBuffers.has(noteName)) {
+                        const tBuf = pianoBuffers.get(noteName);
+                        const rawAudioBuffer = (tBuf && typeof tBuf.get === 'function') ? tBuf.get() : null;
+                        if (rawAudioBuffer) {
+                            pianoSampleList.push({
+                                midi: noteNameToMidiNumber(noteName),
+                                buffer: rawAudioBuffer,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Build per-part gain & filter nodes with exact Highlighted Volume Balance (100% / 60% / 50%)
+            const partChainMap = new Map();
+            for (const p of Object.values(state.parts)) {
+                let highlightVolPct;
+                if (p.id === targetPartId) {
+                    highlightVolPct = CONFIG.HIGHLIGHT_MAIN_VOLUME; // 100%
+                } else {
+                    const isKb = Boolean(
+                        p.isKeyboard ||
+                        p.defaultHidden ||
+                        /\b(harpsichord|cembalo|clavicembalo|clavecin|klavecimbel|clavichord|virginal|spinet|continuo|basso\s*continuo|generalbass|piano|pianoforte|klavier|fortepiano)\b/i.test(p.name || '')
+                    );
+                    highlightVolPct = isKb ? CONFIG.HIGHLIGHT_KEYBOARD_VOLUME : CONFIG.HIGHLIGHT_OTHER_VOLUME; // 50% or 60%
+                }
+
+                const partGain = offlineCtx.createGain();
+                partGain.gain.setValueAtTime(volumePercentToGain(highlightVolPct), 0);
+                partGain.connect(masterBus);
+
+                const patchId = p.patchId || 'piano';
+                const def = INSTRUMENT_CATALOG[patchId] || INSTRUMENT_CATALOG.piano;
+                let destNode = partGain;
+
+                if (def.filter) {
+                    const filterNode = offlineCtx.createBiquadFilter();
+                    filterNode.type = def.filter.type || 'lowpass';
+                    filterNode.frequency.setValueAtTime(def.filter.frequency || 1900, 0);
+                    filterNode.Q.setValueAtTime(def.filter.Q ?? 0.5, 0);
+                    filterNode.connect(partGain);
+                    destNode = filterNode;
+                }
+
+                partChainMap.set(p.id, {
+                    part: p,
+                    patchId,
+                    def,
+                    destNode,
+                    isTarget: p.id === targetPartId,
+                });
+            }
+
+            const pitchScale = state.concertPitchHz / 440;
+            const tpWhole = state.ticksPerWhole || 768;
+
+            // Schedule all score notes across the active timeline slices (with multibar rests skipped to the -1 bar)
+            for (let sIdx = 0; sIdx < slices.length; sIdx++) {
+                const slice = slices[sIdx];
+                const isLastSlice = sIdx === slices.length - 1;
+
+                for (let i = 0; i < state.allScoreNotes.length; i++) {
+                    const n = state.allScoreNotes[i];
+                    const chain = partChainMap.get(n.partId);
+                    if (!chain) continue;
+
+                    const noteStartTicks = n.ticks;
+                    const noteEndTicks = n.ticks + Math.max(12, Math.round((n.durationWhole || 0.25) * tpWhole));
+
+                    // Skip notes completely outside this kept slice
+                    if (noteEndTicks <= slice.startTicks + 6 || noteStartTicks >= slice.endTicks) continue;
+
+                    // Clip note to slice boundaries (so tied accompaniment notes into a -1 bar sound on Beat 1,
+                    // and notes before a skipped multibar rest don't bleed across the cut)
+                    const clippedStartTicks = Math.max(slice.startTicks, noteStartTicks);
+                    const clippedEndTicks = Math.min(slice.endTicks, noteEndTicks);
+                    if (clippedEndTicks <= clippedStartTicks) continue;
+
+                    const startSec = slice.outputStartSec + (rawTicksToSec(clippedStartTicks) - slice.rawStartSec);
+                    const endSecInSlice = slice.outputStartSec + (rawTicksToSec(clippedEndTicks) - slice.rawStartSec);
+                    const rawDurSec = Math.max(0.05, endSecInSlice - startSec);
+                    const wasCutAtSliceEnd = !isLastSlice && noteEndTicks >= slice.endTicks - 4;
+                    const durSec = wasCutAtSliceEnd
+                        ? Math.max(0.04, rawDurSec - 0.01)
+                        : (rawDurSec * (chain.def.durationFactor ?? 0.95));
+
+                    const noteVel = chain.isTarget
+                        ? Math.min(1, (n.velocity || 0.85) * 1.15)
+                        : ((n.velocity || 0.85) * 0.72);
+
+                    if (chain.patchId === 'piano' && pianoSampleList.length > 0) {
+                        // Find closest Salamander piano sample
+                        let bestSample = pianoSampleList[0];
+                        let bestDist = Math.abs(n.midi - bestSample.midi);
+                        for (let s = 1; s < pianoSampleList.length; s++) {
+                            const cand = pianoSampleList[s];
+                            const d = Math.abs(n.midi - cand.midi);
+                            if (d < bestDist) {
+                                bestDist = d;
+                                bestSample = cand;
+                            }
+                        }
+
+                        const src = offlineCtx.createBufferSource();
+                        src.buffer = bestSample.buffer;
+                        src.playbackRate.setValueAtTime(pitchScale * Math.pow(2, (n.midi - bestSample.midi) / 12), startSec);
+
+                        const env = offlineCtx.createGain();
+                        const peakGain = noteVel * 0.88;
+                        const releaseTime = wasCutAtSliceEnd ? 0.04 : 0.42;
+                        env.gain.setValueAtTime(0.0001, startSec);
+                        env.gain.linearRampToValueAtTime(peakGain, startSec + 0.004);
+                        env.gain.setValueAtTime(peakGain, startSec + durSec);
+                        env.gain.exponentialRampToValueAtTime(0.0001, startSec + durSec + releaseTime);
+
+                        src.connect(env);
+                        env.connect(chain.destNode);
+                        src.start(startSec);
+                        src.stop(startSec + durSec + releaseTime + 0.02);
+                    } else {
+                        // Smooth Wave (or fallback synth)
+                        const osc = offlineCtx.createOscillator();
+                        osc.setPeriodicWave(smoothPeriodicWave);
+                        const freqHz = state.concertPitchHz * Math.pow(2, (n.midi - 69) / 12);
+                        osc.frequency.setValueAtTime(freqHz, startSec);
+
+                        const env = offlineCtx.createGain();
+                        const peakGain = noteVel * 0.25; // Matches -12 dB per-voice headroom
+                        const attack = 0.024;
+                        const decay = 0.10;
+                        const sustainGain = peakGain * 0.82;
+                        const release = wasCutAtSliceEnd ? 0.04 : 0.16;
+
+                        env.gain.setValueAtTime(0.0001, startSec);
+                        env.gain.linearRampToValueAtTime(peakGain, startSec + attack);
+                        env.gain.linearRampToValueAtTime(sustainGain, startSec + attack + Math.min(decay, durSec * 0.5));
+                        env.gain.setValueAtTime(sustainGain, startSec + Math.max(attack, durSec));
+                        env.gain.exponentialRampToValueAtTime(0.0001, startSec + Math.max(attack, durSec) + release);
+
+                        osc.connect(env);
+                        env.connect(chain.destNode);
+                        osc.start(startSec);
+                        osc.stop(startSec + Math.max(attack, durSec) + release + 0.02);
+                    }
+                }
+            }
+
+            const renderedBuffer = await offlineCtx.startRendering();
+            const mp3Blob = await encodeAudioBufferToMp3Blob(renderedBuffer);
+
+            const cleanScoreName = (state.scoreTitle || 'Score').replace(/[\\/:*?"<>|]+/g, '').trim();
+            const cleanPartName = (targetPart.name || 'Part').replace(/[\\/:*?"<>|]+/g, '').trim();
+            const fileName = `${cleanScoreName} - ${cleanPartName}.mp3`;
+
+            const url = URL.createObjectURL(mp3Blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 15000);
+
+            const skipMsg = skippedBarsCount > 0 ? ` (skipped ${skippedBarsCount} multi-rest bars)` : '';
+            toast(`Downloaded "${fileName}"${skipMsg}`, 'success', 3800);
+        } catch (err) {
+            console.error('[PYP] Failed to export MP3:', err);
+            toast(`Could not export MP3: ${err.message || 'Render error'}`, 'error');
+        } finally {
+            state.isExportingMp3 = false;
+            targetPart.isExportingMp3 = false;
+            renderPartMixerUI();
+        }
+    }
+
     /**
      * Renders an interactive "This is my part" arrow button in front of each visible part's staff
      * at the beginning of the score so users can highlight their part directly on the sheet music.
@@ -4532,7 +5012,7 @@
             headerRow.appendChild(btnGroup);
             card.appendChild(headerRow);
 
-            // Row 2: Per-Part Classical Instrument Selector
+            // Row 2: Per-Part Classical Instrument Selector + MP3 Download Button
             const instRow = document.createElement('div');
             instRow.className = 'part-instrument-row';
             instRow.appendChild(buildPartInstrumentSelect(part));
@@ -4543,6 +5023,21 @@
                 dot.title = 'Loading instrument samples…';
                 instRow.appendChild(dot);
             }
+
+            const mp3Btn = document.createElement('button');
+            mp3Btn.type = 'button';
+            mp3Btn.className = `part-mp3-btn${part.isExportingMp3 ? ' is-exporting' : ''}`;
+            mp3Btn.disabled = Boolean(state.isExportingMp3);
+            mp3Btn.title = `Download MP3 with ${part.name} highlighted (${CONFIG.HIGHLIGHT_MAIN_VOLUME}% volume, other parts ${CONFIG.HIGHLIGHT_OTHER_VOLUME}%, keyboard ${CONFIG.HIGHLIGHT_KEYBOARD_VOLUME}%, at 100% tempo)`;
+            mp3Btn.setAttribute('aria-label', `Download MP3 for ${part.name}`);
+            mp3Btn.innerHTML = part.isExportingMp3
+                ? `<span class="part-loading-dot"></span><span>MP3</span>`
+                : `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>MP3</span>`;
+            mp3Btn.addEventListener('click', () => {
+                exportHighlightedPartMp3(part.id);
+            });
+            instRow.appendChild(mp3Btn);
+
             card.appendChild(instRow);
 
             // Row 3: Part Volume Slider + Percentage Readout
