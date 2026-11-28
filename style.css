@@ -190,12 +190,15 @@ select {
 }
 
 .scores-folder-section {
-    margin: 0 0 20px;
+    margin: 0;
     padding: 12px 14px;
     border-radius: var(--radius-md);
     background: var(--surface);
     border: 1px solid var(--border);
     text-align: left;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .scores-folder-heading {
@@ -211,7 +214,7 @@ select {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 220px;
+    max-height: 295px;
     overflow-y: auto;
 }
 
@@ -1045,26 +1048,50 @@ body.viewport-fullscreen .viewport-floating-hud {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 100%;
-    padding: 24px;
+    min-height: 100%;
+    padding: 18px 24px;
 }
 
 .empty-state-card {
-    max-width: 520px;
+    width: 100%;
+    max-width: 920px;
+    margin: auto;
     text-align: center;
-    padding: 36px 32px;
+    padding: 24px 28px;
     border: 2px dashed var(--border-strong);
     border-radius: var(--radius-lg);
     background: var(--surface-subtle);
+}
+
+.empty-state-split {
+    display: grid;
+    grid-template-columns: minmax(270px, 1fr) minmax(320px, 1.18fr);
+    gap: 24px;
+    align-items: stretch;
+}
+
+.empty-state-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px 2px;
+}
+
+.empty-state-right {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .empty-state-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 72px;
-    height: 72px;
-    margin-bottom: 14px;
+    width: 62px;
+    height: 62px;
+    margin-bottom: 12px;
     border-radius: 50%;
     background: var(--accent-soft);
     color: var(--accent);
@@ -1078,8 +1105,8 @@ body.viewport-fullscreen .viewport-floating-hud {
 }
 
 .empty-state-card p {
-    margin: 0 0 22px;
-    font-size: 14px;
+    margin: 0 0 18px;
+    font-size: 13.5px;
     line-height: 1.55;
     color: var(--text-secondary);
 }
@@ -1099,7 +1126,7 @@ body.viewport-fullscreen .viewport-floating-hud {
     justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
 }
 
 .cta-btn {
@@ -2367,7 +2394,27 @@ kbd {
     }
 
     .empty-state-card {
-        padding: 18px 14px;
+        padding: 16px 14px;
+    }
+
+    .empty-state-split {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .empty-state-right {
+        order: 1;
+    }
+
+    .empty-state-left {
+        order: 2;
+        padding: 0;
+    }
+
+    .empty-state-left .empty-state-icon,
+    .empty-state-left p {
+        display: none;
     }
 
     .empty-state-icon {
