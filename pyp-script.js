@@ -192,6 +192,7 @@
         centeredStaffBands: [],
         audioReadyPromise: null,
         auditionRestoreTimer: null,
+        activeAuditionPartId: null,
         baseScoreBpm: CONFIG.DEFAULT_BPM,
         activeBarBaseBpm: CONFIG.DEFAULT_BPM,
         tempoPercent: CONFIG.DEFAULT_TEMPO_PERCENT,
@@ -1164,14 +1165,12 @@
         }
     }
 
-    async function auditionClickedNote(noteItem) {
-        if (!noteItem || state.isPlaying) return;
+    async function auditionNotesList(noteItems) {
+        const items = Array.isArray(noteItems) ? noteItems.filter(Boolean) : (noteItems ? [noteItems] : []);
+        if (!items.length || state.isPlaying) return;
 
         const ready = await ensureAudioReady();
         if (!ready || state.isPlaying) return;
-
-        const part = state.parts[noteItem.partId] || Object.values(state.parts)[0];
-        if (!part || !part.instrument) return;
 
         if (state.auditionRestoreTimer) {
             window.clearTimeout(state.auditionRestoreTimer);
@@ -1179,25 +1178,37 @@
         }
         releaseAllInstruments();
 
-        // Ensure the clicked note is audible even if the user muted this part in the mixer
-        if (part.gainNode && part.gainNode.gain.value < 0.15) {
-            const auditionGain = Math.max(0.8, volumePercentToGain(part.volume || CONFIG.DEFAULT_PART_VOLUME));
-            part.gainNode.gain.setValueAtTime(auditionGain, Tone.now());
-        }
-
-        const freqHz = state.concertPitchHz * Math.pow(2, (noteItem.midi - 69) / 12);
-        const bar = getBarObjAtTicks(noteItem.ticks);
+        const isSinglePart = new Set(items.map((n) => n.partId)).size === 1;
+        const bar = getBarObjAtTicks(items[0].ticks);
         const baseBpm = bar ? bar.bpm : state.activeBarBaseBpm;
         const liveBpm = Math.max(10, baseBpm * (state.tempoPercent / 100));
         const secPerWhole = (60 / liveBpm) * 4;
-        const def = INSTRUMENT_CATALOG[part.patchId] || INSTRUMENT_CATALOG.piano;
-        const durFactor = def.durationFactor ?? 0.95;
-        const durationSec = Math.max(0.14, Math.min(4.0, (noteItem.durationWhole || 0.25) * secPerWhole * durFactor));
+        const now = Tone.now();
+        let maxDurationSec = 0.14;
 
-        try {
-            part.instrument.triggerAttackRelease(freqHz, durationSec, Tone.now(), 0.85);
-        } catch (err) {
-            console.warn('[PYP] Audition note trigger error:', err);
+        for (const noteItem of items) {
+            const part = state.parts[noteItem.partId] || Object.values(state.parts)[0];
+            if (!part || !part.instrument) continue;
+
+            // Ensure a targeted single part is audible even if the user muted it in the mixer
+            if (isSinglePart && part.gainNode && part.gainNode.gain.value < 0.15) {
+                const auditionGain = Math.max(0.8, volumePercentToGain(part.volume || CONFIG.DEFAULT_PART_VOLUME));
+                part.gainNode.gain.setValueAtTime(auditionGain, now);
+            }
+
+            const freqHz = state.concertPitchHz * Math.pow(2, (noteItem.midi - 69) / 12);
+            const def = INSTRUMENT_CATALOG[part.patchId] || INSTRUMENT_CATALOG.piano;
+            const durFactor = def.durationFactor ?? 0.95;
+            const durationSec = Math.max(0.14, Math.min(4.0, (noteItem.durationWhole || 0.25) * secPerWhole * durFactor));
+            if (durationSec > maxDurationSec) {
+                maxDurationSec = durationSec;
+            }
+
+            try {
+                part.instrument.triggerAttackRelease(freqHz, durationSec, now, 0.85);
+            } catch (err) {
+                console.warn('[PYP] Audition note trigger error:', err);
+            }
         }
 
         state.auditionRestoreTimer = window.setTimeout(() => {
@@ -1205,7 +1216,12 @@
             if (!state.isPlaying) {
                 applyAllPartGains(false);
             }
-        }, Math.round(durationSec * 1000) + 60);
+        }, Math.round(maxDurationSec * 1000) + 60);
+    }
+
+    async function auditionClickedNote(noteItem) {
+        if (!noteItem) return;
+        await auditionNotesList([noteItem]);
     }
 
     // ===========================================
@@ -1830,6 +1846,15 @@
                             const midi = extractMidiNote(note);
                             if (midi === null) continue;
 
+                            const isTieContinuation = Boolean(note.NoteTie && note.NoteTie.StartNote !== note);
+                            let tiedDurationWhole = writtenDurationWhole;
+                            if (note.NoteTie && !isTieContinuation && Array.isArray(note.NoteTie.Notes) && note.NoteTie.Notes.length > 0) {
+                                tiedDurationWhole = note.NoteTie.Notes.reduce(
+                                    (sum, tn) => sum + (tn.Length?.RealValue ?? 0),
+                                    0
+                                );
+                            }
+
                             if (isPartVisible) {
                                 const gEntry = gNoteBySource.get(note);
                                 const pos = gEntry?.gn?.PositionAndShape?.AbsolutePosition;
@@ -1840,7 +1865,8 @@
                                     stepIdx,
                                     ticks,
                                     midi,
-                                    durationWhole: writtenDurationWhole,
+                                    durationWhole: tiedDurationWhole,
+                                    isTieContinuation,
                                     partId,
                                     svgEl: gEntry?.svgEl || null,
                                     noteX,
@@ -1849,18 +1875,10 @@
                             }
 
                             if (!canFastRebuild) {
-                                let durationWhole = writtenDurationWhole;
-                                if (note.NoteTie) {
-                                    if (note.NoteTie.StartNote !== note) {
-                                        continue;
-                                    }
-                                    if (Array.isArray(note.NoteTie.Notes) && note.NoteTie.Notes.length > 0) {
-                                        durationWhole = note.NoteTie.Notes.reduce(
-                                            (sum, tn) => sum + (tn.Length?.RealValue ?? 0),
-                                            0
-                                        );
-                                    }
+                                if (isTieContinuation) {
+                                    continue;
                                 }
+                                const durationWhole = tiedDurationWhole;
 
                                 const noteEndTicks = ticks + realValueToTicks(durationWhole);
                                 if (noteEndTicks > maxNoteEndTicks) {
@@ -3039,6 +3057,86 @@
         }
     }
 
+    function getTargetSteppingPartId() {
+        if (
+            state.activeAuditionPartId &&
+            state.parts[state.activeAuditionPartId] &&
+            !state.parts[state.activeAuditionPartId].hidden
+        ) {
+            return state.activeAuditionPartId;
+        }
+        const visibleParts = Object.values(state.parts).filter((p) => !p.hidden);
+        const highlightedPart = visibleParts.find((p) => p.highlighted);
+        if (highlightedPart) return highlightedPart.id;
+        const soloedPart = visibleParts.find((p) => p.soloed);
+        if (soloedPart) return soloedPart.id;
+        if (visibleParts.length === 1) return visibleParts[0].id;
+        return null;
+    }
+
+    function getStepNotesForStepping(step, targetPartId) {
+        if (!step || !Array.isArray(step.clickableNotes) || step.clickableNotes.length === 0) return [];
+        const attacks = step.clickableNotes.filter((cn) => !cn.isTieContinuation && !state.parts[cn.partId]?.hidden);
+        if (!attacks.length) return [];
+
+        if (targetPartId) {
+            return attacks.filter((cn) => cn.partId === targetPartId);
+        }
+
+        const unmuted = attacks.filter((cn) => !state.parts[cn.partId]?.muted);
+        return unmuted.length > 0 ? unmuted : attacks;
+    }
+
+    /**
+     * Navigates note-by-note forward (delta > 0) or backward (delta < 0) via Shift + ArrowRight / ArrowLeft,
+     * moving the cursor to the next/previous note onset, highlighting it, and auditioning what it sounds like.
+     */
+    function stepNote(delta) {
+        if (!state.scoreLoaded || !state.cursorSteps.length) return;
+        if (state.isPlaying) {
+            pausePlayback(true);
+        }
+
+        const dir = delta >= 0 ? 1 : -1;
+        const targetPartId = getTargetSteppingPartId();
+        const currIdx = Math.max(0, Math.min(state.cursorSteps.length - 1, state.currentStepIndex));
+
+        let chosenStep = null;
+        let chosenNotes = [];
+
+        for (let idx = currIdx + dir; idx >= 0 && idx < state.cursorSteps.length; idx += dir) {
+            const candStep = state.cursorSteps[idx];
+            const notesAtStep = getStepNotesForStepping(candStep, targetPartId);
+            if (notesAtStep.length > 0) {
+                chosenStep = candStep;
+                chosenNotes = notesAtStep;
+                break;
+            }
+        }
+
+        // If at the very first or last note of the part/score, stay on the current note and replay it
+        if (!chosenStep) {
+            const currStep = state.cursorSteps[currIdx];
+            const currNotes = getStepNotesForStepping(currStep, targetPartId);
+            if (currNotes.length > 0) {
+                chosenStep = currStep;
+                chosenNotes = currNotes;
+            }
+        }
+
+        if (!chosenStep || !chosenNotes.length) return;
+
+        seekToTicks(chosenStep.ticks, { snapScroll: true, keepPlaying: false });
+
+        clearAllNoteHighlights();
+        for (const cn of chosenNotes) {
+            if (cn.svgEl) {
+                applyNoteHighlightClass(cn.svgEl);
+            }
+        }
+        auditionNotesList(chosenNotes);
+    }
+
     // ===========================================
     // UI RENDERERS & UPDATES
     // ===========================================
@@ -3938,6 +4036,7 @@
         if (!part) return;
 
         const willHighlight = !part.highlighted;
+        state.activeAuditionPartId = willHighlight ? part.id : null;
         for (const p of Object.values(state.parts)) {
             if (willHighlight) {
                 if (p.id === part.id) {
@@ -4343,7 +4442,12 @@
             soloBtn.setAttribute('aria-pressed', String(part.soloed));
             soloBtn.addEventListener('click', () => {
                 part.soloed = !part.soloed;
-                if (part.soloed) part.muted = false;
+                if (part.soloed) {
+                    part.muted = false;
+                    state.activeAuditionPartId = part.id;
+                } else if (state.activeAuditionPartId === part.id && !part.highlighted) {
+                    state.activeAuditionPartId = null;
+                }
                 renderPartMixerUI();
                 applyAllPartGains(false);
             });
@@ -4507,6 +4611,7 @@
         state.scoreTitle = fallbackTitle;
         state.rawXmlPartMeta = parseRawXmlPartMetadata(content);
         state.parts = {};
+        state.activeAuditionPartId = null;
         state.currentTicks = 0;
         state.smoothTicks = 0;
         state.currentStepIndex = 0;
@@ -5785,6 +5890,10 @@
             if (!clickedNote) {
                 clickedNote = bestStep.clickableNotes[0];
             }
+        }
+
+        if (bestStep && clickedNote) {
+            state.activeAuditionPartId = clickedNote.partId;
         }
 
         if (!bestStep) return;
@@ -7338,13 +7447,21 @@
                 case 'ArrowLeft':
                     if (state.scoreLoaded) {
                         e.preventDefault();
-                        stepBar(-1);
+                        if (e.shiftKey) {
+                            stepNote(-1);
+                        } else {
+                            stepBar(-1);
+                        }
                     }
                     break;
                 case 'ArrowRight':
                     if (state.scoreLoaded) {
                         e.preventDefault();
-                        stepBar(1);
+                        if (e.shiftKey) {
+                            stepNote(1);
+                        } else {
+                            stepBar(1);
+                        }
                     }
                     break;
                 case 'l':
